@@ -188,6 +188,37 @@ func TestChangedFlagsUpdateConfigAndCanonicalProvenance(t *testing.T) {
 	}
 }
 
+func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles" help:"profile names"`
+	}
+
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[config](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--profiles=flag-a,flag-b", "--profiles", "flag-c"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[config](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, updates, err := loader(config{Profiles: []string{"abc"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+
+	want := config{Profiles: []string{"flag-a", "flag-b", "flag-c"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+	if updates["profiles"] != pflagloader.SourcePFlag {
+		t.Fatalf("updates[profiles] = %q, want SourcePFlag", updates["profiles"])
+	}
+}
+
 type pflagAllScalarsConfig struct {
 	String   string        `config:"string" help:"string"`
 	Bool     bool          `config:"bool" help:"bool"`

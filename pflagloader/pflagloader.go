@@ -3,6 +3,7 @@ package pflagloader
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	configloader "github.com/jmcampanini/go-config-loader"
@@ -31,7 +32,7 @@ func Register[C any](flags *pflag.FlagSet) error {
 	}
 
 	for _, field := range fields {
-		flag := flags.VarPF(&scalarValue{typ: field.Type}, field.ConfigTag, "", field.Help)
+		flag := flags.VarPF(newFlagValue(field.Type), field.ConfigTag, "", field.Help)
 		if field.Type.Kind() == reflect.Bool {
 			flag.NoOptDefVal = "true"
 		}
@@ -66,7 +67,7 @@ func NewLoader[C any](flags *pflag.FlagSet) (configloader.ConfigLoader[C], error
 			if !flag.Changed {
 				continue
 			}
-			value, err := configmeta.ParseScalar(flag.Value.String(), field.Type)
+			value, err := configmeta.ParseText(flag.Value.String(), field.Type)
 			if err != nil {
 				return base, nil, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
 			}
@@ -83,6 +84,13 @@ func NewLoader[C any](flags *pflag.FlagSet) (configloader.ConfigLoader[C], error
 
 		return config, updates, nil
 	}, nil
+}
+
+func newFlagValue(typ reflect.Type) pflag.Value {
+	if typ.Kind() == reflect.Slice {
+		return &sliceValue{typ: typ}
+	}
+	return &scalarValue{typ: typ}
 }
 
 type scalarValue struct {
@@ -114,4 +122,31 @@ func (v *scalarValue) Type() string {
 
 func (v *scalarValue) IsBoolFlag() bool {
 	return v != nil && v.typ != nil && v.typ.Kind() == reflect.Bool
+}
+
+type sliceValue struct {
+	typ   reflect.Type
+	texts []string
+}
+
+func (v *sliceValue) Set(text string) error {
+	v.texts = append(v.texts, text)
+	return nil
+}
+
+func (v *sliceValue) String() string {
+	if v == nil {
+		return ""
+	}
+	return strings.Join(v.texts, ",")
+}
+
+func (v *sliceValue) Type() string {
+	if v == nil || v.typ == nil || v.typ.Kind() != reflect.Slice {
+		return "slice"
+	}
+	if v.typ.Elem() == reflect.TypeOf(time.Duration(0)) {
+		return "durationSlice"
+	}
+	return v.typ.Elem().Kind().String() + "Slice"
 }

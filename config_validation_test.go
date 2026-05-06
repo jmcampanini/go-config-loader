@@ -29,7 +29,7 @@ type validateValidConfig struct {
 	Port     int           `config:"port"`
 	Timeout  time.Duration `config:"timeout"`
 	Nested   validateNested
-	Values   []int
+	Values   []int `config:"values"`
 	Pair     [2]string
 	Labels   map[string]string
 	Backends map[string]validateMapValue
@@ -104,7 +104,6 @@ func TestValidateConfigRejectsInvalidShapes(t *testing.T) {
 		{name: "anonymous embedded field", err: configloader.ValidateConfig[validateEmbeddedField]()},
 		{name: "non-string map key", err: configloader.ValidateConfig[validateNonStringMapKey]()},
 		{name: "tagged struct", err: configloader.ValidateConfig[validateTaggedStruct]()},
-		{name: "tagged slice", err: configloader.ValidateConfig[validateTaggedSlice]()},
 		{name: "tagged array", err: configloader.ValidateConfig[validateTaggedArray]()},
 		{name: "tagged map", err: configloader.ValidateConfig[validateTaggedMap]()},
 		{name: "tagged pointer", err: configloader.ValidateConfig[validateTaggedPointer]()},

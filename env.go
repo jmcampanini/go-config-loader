@@ -9,7 +9,7 @@ import (
 	"github.com/jmcampanini/go-config-loader/internal/configmeta"
 )
 
-// NewEnvironmentLoader constructs a loader that reads config-tagged scalar fields from env.
+// NewEnvironmentLoader constructs a loader that reads config-tagged scalar and scalar-slice fields from env.
 func NewEnvironmentLoader[C any](prefix string, env map[string]string) (ConfigLoader[C], error) {
 	if !configmeta.IsKebabCase(prefix) {
 		return nil, fmt.Errorf("configloader: invalid environment prefix %q", prefix)
@@ -48,7 +48,7 @@ func NewEnvironmentLoader[C any](prefix string, env map[string]string) (ConfigLo
 			if !ok {
 				continue
 			}
-			value, err := configmeta.ParseScalar(raw, item.field.Type)
+			value, err := configmeta.ParseText(raw, item.field.Type)
 			if err != nil {
 				return base, nil, fmt.Errorf("configloader: environment variable %s for field %s: %w", item.name, item.field.GoPath, err)
 			}

@@ -172,6 +172,32 @@ func TestEnvironmentLoaderParsesEverySupportedScalarType(t *testing.T) {
 	}
 }
 
+func TestEnvironmentLoaderParsesStringSlices(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles"`
+	}
+
+	loader, err := configloader.NewEnvironmentLoader[config]("app", map[string]string{
+		"APP_PROFILES": "env-a,env-b",
+	})
+	if err != nil {
+		t.Fatalf("NewEnvironmentLoader() error = %v", err)
+	}
+
+	got, updates, err := loader(config{Profiles: []string{"abc"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+
+	want := config{Profiles: []string{"env-a", "env-b"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+	if updates["profiles"] != configloader.SourceEnv {
+		t.Fatalf("updates[profiles] = %q, want SourceEnv", updates["profiles"])
+	}
+}
+
 func TestEnvironmentLoaderParseFailureReturnsErrorWithoutApplyingPartialUpdate(t *testing.T) {
 	loader, err := configloader.NewEnvironmentLoader[envBasicConfig]("my-cli", map[string]string{
 		"MY_CLI_API_URL": "changed",

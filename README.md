@@ -33,7 +33,9 @@ Supported field types:
 - slices and arrays of supported element types
 - `map[string]T` where `T` is supported
 
-`config:"..."` tags define the external name used for environment variables and pflags. For example, `config:"api-url"` maps to `MY_APP_API_URL` with the `my-app` env prefix and to the `--api-url` flag. Only scalar leaf fields with a `config` tag are loaded from env or pflags. TOML loading uses `toml:"..."` tags when present, otherwise Go field names. Provenance paths are always derived from Go field names, not tags.
+`config:"..."` tags define the external name used for environment variables and pflags. For example, `config:"api-url"` maps to `MY_APP_API_URL` with the `my-app` env prefix and to the `--api-url` flag. Only scalar leaf fields and slices of scalar leaf fields with a `config` tag are loaded from env or pflags. TOML loading uses `toml:"..."` tags when present, otherwise Go field names. Provenance paths are always derived from Go field names, not tags.
+
+Slice env/pflag contract: values are comma-separated, repeated pflags append, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
 
 ## Canonical layered loading
 
@@ -104,4 +106,4 @@ func loadCustomConfig(path string) (Config, configloader.Updates) {
 }
 ```
 
-See the `examples` package for testable examples and `examples/cobra` for isolated Cobra CLI integration.
+See the `examples` package for testable examples, `examples/cobra` for isolated Cobra CLI integration, and `examples/cobra-slices` for Cobra slice integration.

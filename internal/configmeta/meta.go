@@ -21,7 +21,7 @@ var (
 	textUnmarshalerType = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 )
 
-// Field describes a supported scalar field with a direct config tag.
+// Field describes a supported env/pflag-loadable field with a direct config tag.
 type Field struct {
 	GoPath    string
 	ConfigTag string
@@ -201,7 +201,7 @@ func (s *validationState) validateConfigTag(tag, path string, t reflect.Type) er
 	if !IsKebabCase(tag) {
 		return fmt.Errorf("configmeta: field %s has invalid config tag %q", displayPath(path), tag)
 	}
-	if !IsScalar(t) {
+	if !IsTextLoadable(t) {
 		return fmt.Errorf("configmeta: field %s has config tag on unsupported type %s", displayPath(path), t)
 	}
 	if prev, exists := s.tags[tag]; exists {
@@ -228,6 +228,36 @@ func IsScalar(t reflect.Type) bool {
 	default:
 		return false
 	}
+}
+
+// IsTextLoadable reports whether t can be loaded from env vars and pflags.
+func IsTextLoadable(t reflect.Type) bool {
+	if IsScalar(t) {
+		return true
+	}
+	return t.Kind() == reflect.Slice && IsScalar(t.Elem())
+}
+
+// ParseText parses text into a reflect.Value of a supported env/pflag type.
+func ParseText(text string, t reflect.Type) (reflect.Value, error) {
+	if IsScalar(t) {
+		return ParseScalar(text, t)
+	}
+	if t.Kind() == reflect.Slice && IsScalar(t.Elem()) {
+		parsed := reflect.MakeSlice(t, 0, 0)
+		if text == "" {
+			return parsed, nil
+		}
+		for _, part := range strings.Split(text, ",") {
+			value, err := ParseScalar(part, t.Elem())
+			if err != nil {
+				return reflect.Value{}, fmt.Errorf("parse %q as %s: %w", text, t, err)
+			}
+			parsed = reflect.Append(parsed, value)
+		}
+		return parsed, nil
+	}
+	return reflect.Value{}, fmt.Errorf("type %s is not a supported env/pflag type", t)
 }
 
 // ParseScalar parses text into a reflect.Value of the supported scalar type t.
