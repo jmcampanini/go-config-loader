@@ -197,7 +197,7 @@ func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) 
 	if err := pflagloader.Register[config](flags); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
-	if err := flags.Parse([]string{"--profiles=flag-a,flag-b", "--profiles", "flag-c"}); err != nil {
+	if err := flags.Parse([]string{"--profiles=flag-a, flag-b", "--profiles", "flag-c,flag-a"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 

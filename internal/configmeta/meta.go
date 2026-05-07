@@ -248,11 +248,17 @@ func ParseText(text string, t reflect.Type) (reflect.Value, error) {
 		if text == "" {
 			return parsed, nil
 		}
+		seen := make(map[any]struct{})
 		for _, part := range strings.Split(text, ",") {
-			value, err := ParseScalar(part, t.Elem())
+			value, err := ParseScalar(strings.TrimSpace(part), t.Elem())
 			if err != nil {
 				return reflect.Value{}, fmt.Errorf("parse %q as %s: %w", text, t, err)
 			}
+			key := value.Interface()
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
 			parsed = reflect.Append(parsed, value)
 		}
 		return parsed, nil

@@ -86,3 +86,23 @@ func TestIsKebabCase(t *testing.T) {
 		}
 	}
 }
+
+func TestParseTextTrimsAndDedupesSliceValues(t *testing.T) {
+	got, err := ParseText("a, b,c,a, b ", reflect.TypeOf([]string{}))
+	if err != nil {
+		t.Fatalf("ParseText() error = %v", err)
+	}
+	want := []string{"a", "b", "c"}
+	if !reflect.DeepEqual(got.Interface(), want) {
+		t.Fatalf("ParseText() = %#v, want %#v", got.Interface(), want)
+	}
+
+	ints, err := ParseText("1, 2,01,3", reflect.TypeOf([]int{}))
+	if err != nil {
+		t.Fatalf("ParseText() ints error = %v", err)
+	}
+	wantInts := []int{1, 2, 3}
+	if !reflect.DeepEqual(ints.Interface(), wantInts) {
+		t.Fatalf("ParseText() ints = %#v, want %#v", ints.Interface(), wantInts)
+	}
+}

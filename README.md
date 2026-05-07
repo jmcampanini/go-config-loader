@@ -35,7 +35,7 @@ Supported field types:
 
 `config:"..."` tags define the external name used for environment variables and pflags. For example, `config:"api-url"` maps to `MY_APP_API_URL` with the `my-app` env prefix and to the `--api-url` flag. Only scalar leaf fields and slices of scalar leaf fields with a `config` tag are loaded from env or pflags. TOML loading uses `toml:"..."` tags when present, otherwise Go field names. Provenance paths are always derived from Go field names, not tags.
 
-Slice env/pflag contract: values are comma-separated, repeated pflags append, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
+Slice env/pflag contract: values are comma-separated, surrounding whitespace is trimmed from each item, duplicate items are removed while preserving first-seen order, repeated pflags append before deduping, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
 
 ## Canonical layered loading
 

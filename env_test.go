@@ -178,7 +178,7 @@ func TestEnvironmentLoaderParsesStringSlices(t *testing.T) {
 	}
 
 	loader, err := configloader.NewEnvironmentLoader[config]("app", map[string]string{
-		"APP_PROFILES": "env-a,env-b",
+		"APP_PROFILES": "env-a, env-b,env-a",
 	})
 	if err != nil {
 		t.Fatalf("NewEnvironmentLoader() error = %v", err)
