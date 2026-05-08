@@ -26,7 +26,11 @@ func ExampleLoad_fileAndEnvironment() {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			panic(err)
+		}
+	}()
 
 	path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte(`

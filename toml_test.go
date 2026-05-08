@@ -283,3 +283,73 @@ func TestTomlPickLastDoesNotFallBackAfterInvalidFile(t *testing.T) {
 		t.Fatalf("loader() got=%#v err=%v, want invalid high file error without fallback", got, err)
 	}
 }
+
+func TestTomlFileLoadersNormalizePathsToAbsolute(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "config.toml", "name = 'relative'\n")
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir() error = %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Fatalf("Chdir(%q) error = %v", oldWD, err)
+		}
+	}()
+
+	expectedPath, err := filepath.Abs("config.toml")
+	if err != nil {
+		t.Fatalf("Abs() error = %v", err)
+	}
+	loader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{"config.toml"})
+	if err != nil {
+		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
+	}
+	got, updates, err := loader(tomlFileConfig{})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	if got.Name != "relative" || updates["name"] != expectedPath {
+		t.Fatalf("loader() config=%#v updates=%#v, want source %q", got, updates, expectedPath)
+	}
+}
+
+func TestTomlRequiredFileLoader(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTestFile(t, dir, "required.toml", "name = 'required'\n")
+
+	loader, err := configloader.NewRequiredFileLoader[tomlFileConfig](path)
+	if err != nil {
+		t.Fatalf("NewRequiredFileLoader() error = %v", err)
+	}
+	got, updates, err := loader(tomlFileConfig{Name: "default"})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	if got.Name != "required" || !reflect.DeepEqual(updates, configloader.Updates{"name": path}) {
+		t.Fatalf("loader() config=%#v updates=%#v, want required file source", got, updates)
+	}
+}
+
+func TestTomlRequiredFileLoaderMissingAndDirectory(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.toml")
+	loader, err := configloader.NewRequiredFileLoader[tomlFileConfig](missing)
+	if err != nil {
+		t.Fatalf("NewRequiredFileLoader() error = %v", err)
+	}
+	if _, _, err := loader(tomlFileConfig{}); err == nil || !strings.Contains(err.Error(), "required config file") || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("loader() missing error = %v, want required missing error", err)
+	}
+
+	dirLoader, err := configloader.NewRequiredFileLoader[tomlFileConfig](dir)
+	if err != nil {
+		t.Fatalf("NewRequiredFileLoader(dir) error = %v", err)
+	}
+	if _, _, err := dirLoader(tomlFileConfig{}); err == nil || !strings.Contains(err.Error(), "is a directory") {
+		t.Fatalf("loader() directory error = %v, want directory error", err)
+	}
+}

@@ -47,9 +47,6 @@ type validateNonStringMapKey struct{ M map[int]string }
 type validateTaggedStruct struct {
 	Nested validateNested `config:"nested"`
 }
-type validateTaggedSlice struct {
-	Values []int `config:"values"`
-}
 type validateTaggedArray struct {
 	Values [2]int `config:"values"`
 }

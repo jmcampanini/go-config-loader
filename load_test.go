@@ -8,34 +8,34 @@ import (
 	configloader "github.com/jmcampanini/go-config-loader"
 )
 
-type phase2NestedConfig struct {
+type loadNestedConfig struct {
 	Host string
 	Port int
 }
 
-type phase2Config struct {
+type loadConfig struct {
 	Name     string
 	Debug    bool
 	Count    int
 	Timeout  time.Duration
-	Nested   phase2NestedConfig
+	Nested   loadNestedConfig
 	Tags     []string
 	Pair     [2]int
 	Labels   map[string]string
-	Servers  map[string]phase2NestedConfig
+	Servers  map[string]loadNestedConfig
 	NilMap   map[string]string
 	EmptyMap map[string]string
 }
 
 func TestLoadDefaultsOnlyReturnsDefaultsAndDefaultProvenance(t *testing.T) {
-	defaults := phase2Config{
+	defaults := loadConfig{
 		Timeout: time.Second,
 		Pair:    [2]int{1, 0},
 		Labels: map[string]string{
 			"env":   "prod",
 			`a"b\c`: "quoted",
 		},
-		Servers: map[string]phase2NestedConfig{
+		Servers: map[string]loadNestedConfig{
 			"prod": {Host: "example.com", Port: 443},
 		},
 		EmptyMap: map[string]string{},
@@ -75,10 +75,10 @@ func TestLoadDefaultsOnlyReturnsDefaultsAndDefaultProvenance(t *testing.T) {
 }
 
 func TestLoadRunsLoadersInOrderWithCurrentConfig(t *testing.T) {
-	defaults := phase2Config{Count: 1}
+	defaults := loadConfig{Count: 1}
 	var calls []string
 
-	first := func(base phase2Config) (phase2Config, configloader.Updates, error) {
+	first := func(base loadConfig) (loadConfig, configloader.Updates, error) {
 		calls = append(calls, "first")
 		if base.Count != 1 {
 			t.Fatalf("first loader base.Count = %d, want 1", base.Count)
@@ -86,7 +86,7 @@ func TestLoadRunsLoadersInOrderWithCurrentConfig(t *testing.T) {
 		base.Count = 2
 		return base, configloader.Updates{"count": "first"}, nil
 	}
-	second := func(base phase2Config) (phase2Config, configloader.Updates, error) {
+	second := func(base loadConfig) (loadConfig, configloader.Updates, error) {
 		calls = append(calls, "second")
 		if base.Count != 2 {
 			t.Fatalf("second loader base.Count = %d, want 2", base.Count)
@@ -111,19 +111,19 @@ func TestLoadRunsLoadersInOrderWithCurrentConfig(t *testing.T) {
 }
 
 func TestLoadMergesUpdatesLastWriteWinsAndTrustsKeys(t *testing.T) {
-	first := func(base phase2Config) (phase2Config, configloader.Updates, error) {
+	first := func(base loadConfig) (loadConfig, configloader.Updates, error) {
 		base.Name = "first"
 		return base, configloader.Updates{
 			"name":            "first",
 			"not.a.real.path": "custom",
 		}, nil
 	}
-	second := func(base phase2Config) (phase2Config, configloader.Updates, error) {
+	second := func(base loadConfig) (loadConfig, configloader.Updates, error) {
 		base.Name = "second"
 		return base, configloader.Updates{"name": "second"}, nil
 	}
 
-	got, updates, err := configloader.Load(phase2Config{}, first, second)
+	got, updates, err := configloader.Load(loadConfig{}, first, second)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -139,7 +139,7 @@ func TestLoadMergesUpdatesLastWriteWinsAndTrustsKeys(t *testing.T) {
 }
 
 func TestLoadDefaultProvenanceRejectsEmptyMapKeys(t *testing.T) {
-	_, _, err := configloader.Load(phase2Config{
+	_, _, err := configloader.Load(loadConfig{
 		Labels: map[string]string{"": "bad"},
 	})
 	if err == nil {

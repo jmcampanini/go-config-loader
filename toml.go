@@ -3,6 +3,7 @@ package configloader
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -23,10 +24,11 @@ func newFilesLoader[C any](files []string, pickLast bool) (ConfigLoader[C], erro
 	}
 	filesCopy := make([]string, len(files))
 	for i, file := range files {
-		if file == "" {
-			return nil, fmt.Errorf("configloader: file path at index %d is empty", i)
+		path, err := normalizeFilePath(file)
+		if err != nil {
+			return nil, fmt.Errorf("configloader: file path at index %d: %w", i, err)
 		}
-		filesCopy[i] = file
+		filesCopy[i] = path
 	}
 
 	return func(base C) (C, Updates, error) {
@@ -72,6 +74,17 @@ func newFilesLoader[C any](files []string, pickLast bool) (ConfigLoader[C], erro
 	}, nil
 }
 
+func normalizeFilePath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("file path is empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("make file path %q absolute: %w", path, err)
+	}
+	return abs, nil
+}
+
 func fileExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
@@ -81,6 +94,31 @@ func fileExists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("configloader: stat file %q: %w", path, err)
+}
+
+// NewRequiredFileLoader constructs a TOML loader for one required config file.
+func NewRequiredFileLoader[C any](file string) (ConfigLoader[C], error) {
+	if err := ValidateConfig[C](); err != nil {
+		return nil, err
+	}
+	path, err := normalizeFilePath(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(base C) (C, Updates, error) {
+		info, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return base, nil, fmt.Errorf("configloader: required config file %q does not exist", path)
+			}
+			return base, nil, fmt.Errorf("configloader: stat required config file %q: %w", path, err)
+		}
+		if info.IsDir() {
+			return base, nil, fmt.Errorf("configloader: required config file %q is a directory", path)
+		}
+		return loadOneTomlFile(base, path)
+	}, nil
 }
 
 func loadOneTomlFile[C any](base C, file string) (C, Updates, error) {
