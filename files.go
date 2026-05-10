@@ -217,12 +217,12 @@ func directoriesBetween(start, end string) []string {
 	return reversed
 }
 
-// NewMergeAllFilesLoader constructs a low-to-high priority merge-all TOML loader.
-func NewMergeAllFilesLoader[C any](files []string) (ConfigLoader[C], error) {
-	return newFilesLoader[C](files, false)
+// NewMergeAllFilesLoader constructs a low-to-high priority merge-all config file loader.
+func NewMergeAllFilesLoader[C any](files []string, opts ...FileLoaderOption) (ConfigLoader[C], error) {
+	return newFilesLoader[C](files, false, opts...)
 }
 
-// NewPickLastFileLoader constructs a loader that uses the highest-priority existing TOML file.
-func NewPickLastFileLoader[C any](files []string) (ConfigLoader[C], error) {
-	return newFilesLoader[C](files, true)
+// NewPickLastFileLoader constructs a loader that uses the highest-priority existing config file.
+func NewPickLastFileLoader[C any](files []string, opts ...FileLoaderOption) (ConfigLoader[C], error) {
+	return newFilesLoader[C](files, true, opts...)
 }

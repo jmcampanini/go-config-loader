@@ -18,8 +18,12 @@ type tomlKeyNode struct {
 	children map[string]*tomlKeyNode
 }
 
-func newFilesLoader[C any](files []string, pickLast bool) (ConfigLoader[C], error) {
+func newFilesLoader[C any](files []string, pickLast bool, opts ...FileLoaderOption) (ConfigLoader[C], error) {
 	if err := ValidateConfig[C](); err != nil {
+		return nil, err
+	}
+	fileOpts, err := resolveFileLoaderOptions(opts)
+	if err != nil {
 		return nil, err
 	}
 	filesCopy := make([]string, len(files))
@@ -46,13 +50,19 @@ func newFilesLoader[C any](files []string, pickLast bool) (ConfigLoader[C], erro
 				if !exists {
 					continue
 				}
-				return loadOneTomlFile(base, file)
+				loaded, updates, warnings, err := loadOneTomlFile(base, file, fileOpts)
+				if err != nil {
+					return base, nil, err
+				}
+				emitFileLoaderWarnings(warnings, fileOpts)
+				return loaded, updates, nil
 			}
 			return base, Updates{}, nil
 		}
 
 		config := base
 		updates := Updates{}
+		var warnings []Warning
 		for _, file := range filesCopy {
 			exists, err := fileExists(file)
 			if err != nil {
@@ -61,15 +71,18 @@ func newFilesLoader[C any](files []string, pickLast bool) (ConfigLoader[C], erro
 			if !exists {
 				continue
 			}
-			loaded, fileUpdates, err := loadOneTomlFile(config, file)
+			loaded, fileUpdates, fileWarnings, err := loadOneTomlFile(config, file, fileOpts)
 			if err != nil {
 				return base, nil, err
 			}
 			config = loaded
+			warnings = append(warnings, fileWarnings...)
 			for path, source := range fileUpdates {
 				updates[path] = source
 			}
 		}
+		// Delay callbacks until success so warnings describe config that was applied.
+		emitFileLoaderWarnings(warnings, fileOpts)
 		return config, updates, nil
 	}, nil
 }
@@ -96,9 +109,13 @@ func fileExists(path string) (bool, error) {
 	return false, fmt.Errorf("configloader: stat file %q: %w", path, err)
 }
 
-// NewRequiredFileLoader constructs a TOML loader for one required config file.
-func NewRequiredFileLoader[C any](file string) (ConfigLoader[C], error) {
+// NewRequiredFileLoader constructs a loader for one required config file.
+func NewRequiredFileLoader[C any](file string, opts ...FileLoaderOption) (ConfigLoader[C], error) {
 	if err := ValidateConfig[C](); err != nil {
+		return nil, err
+	}
+	fileOpts, err := resolveFileLoaderOptions(opts)
+	if err != nil {
 		return nil, err
 	}
 	path, err := normalizeFilePath(file)
@@ -117,26 +134,62 @@ func NewRequiredFileLoader[C any](file string) (ConfigLoader[C], error) {
 		if info.IsDir() {
 			return base, nil, fmt.Errorf("configloader: required config file %q is a directory", path)
 		}
-		return loadOneTomlFile(base, path)
+		loaded, updates, warnings, err := loadOneTomlFile(base, path, fileOpts)
+		if err != nil {
+			return base, nil, err
+		}
+		// Delay callbacks until success so warnings describe config that was applied.
+		emitFileLoaderWarnings(warnings, fileOpts)
+		return loaded, updates, nil
 	}, nil
 }
 
-func loadOneTomlFile[C any](base C, file string) (C, Updates, error) {
+func loadOneTomlFile[C any](base C, file string, opts fileLoaderOptions) (C, Updates, []Warning, error) {
 	config := base
 	metadata, err := toml.DecodeFile(file, &config)
 	if err != nil {
-		return base, nil, fmt.Errorf("configloader: load TOML file %q: %w", file, err)
+		return base, nil, nil, fmt.Errorf("configloader: load config file %q: %w", file, err)
 	}
-	if undecoded := metadata.Undecoded(); len(undecoded) > 0 {
-		return base, nil, fmt.Errorf("configloader: TOML file %q contains unknown keys: %s", file, tomlKeysString(undecoded))
+
+	warnings, err := inspectUnknownTomlKeys(file, metadata, opts)
+	if err != nil {
+		return base, nil, nil, err
 	}
 
 	updates := Updates{}
 	root := tomlPresenceTree(metadata.Keys())
 	if err := collectTomlUpdates(reflect.ValueOf(config), root, "", file, updates); err != nil {
-		return base, nil, fmt.Errorf("configloader: inspect TOML file %q: %w", file, err)
+		return base, nil, nil, fmt.Errorf("configloader: inspect config file %q: %w", file, err)
 	}
-	return config, updates, nil
+	return config, updates, warnings, nil
+}
+
+func inspectUnknownTomlKeys(file string, metadata toml.MetaData, opts fileLoaderOptions) ([]Warning, error) {
+	if opts.unknownKeyPolicy == UnknownKeyIgnore {
+		return nil, nil
+	}
+	undecoded := metadata.Undecoded()
+	if len(undecoded) == 0 {
+		return nil, nil
+	}
+	message := "contains unknown keys: " + tomlKeysString(undecoded)
+	switch opts.unknownKeyPolicy {
+	case UnknownKeyError:
+		return nil, fmt.Errorf("configloader: config file %q %s", file, message)
+	case UnknownKeyWarn:
+		return []Warning{{Source: file, Message: message}}, nil
+	default:
+		return nil, fmt.Errorf("configloader: invalid unknown key policy %d", opts.unknownKeyPolicy)
+	}
+}
+
+func emitFileLoaderWarnings(warnings []Warning, opts fileLoaderOptions) {
+	if opts.warningHandler == nil {
+		return
+	}
+	for _, warning := range warnings {
+		opts.warningHandler(warning)
+	}
 }
 
 func tomlKeysString(keys []toml.Key) string {
@@ -144,6 +197,7 @@ func tomlKeysString(keys []toml.Key) string {
 	for i, key := range keys {
 		parts[i] = key.String()
 	}
+	sort.Strings(parts)
 	return strings.Join(parts, ", ")
 }
 

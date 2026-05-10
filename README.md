@@ -128,6 +128,25 @@ func loadCustomConfig(path string) (Config, configloader.Updates) {
 }
 ```
 
+By default, config files are strict: unknown keys are errors. To allow extra keys, choose a permissive unknown-key mode:
+
+```go
+// Ignore unknown config file keys.
+fileLoader, _ := configloader.NewMergeAllFilesLoader[Config](
+    files,
+    configloader.WithUnknownKeys(configloader.UnknownKeyIgnore),
+)
+
+// Log unknown config file keys as warnings.
+fileLoader, _ = configloader.NewMergeAllFilesLoader[Config](
+    files,
+    configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
+    configloader.WithWarningHandler(func(w configloader.Warning) {
+        log.Printf("%s: %s", w.Source, w.Message)
+    }),
+)
+```
+
 For an explicit `--config` flag that must point to an existing file and should skip all other external sources, use a required file loader:
 
 ```go
