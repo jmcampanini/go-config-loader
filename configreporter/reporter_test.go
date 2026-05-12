@@ -31,7 +31,7 @@ func TestReporterTOML(t *testing.T) {
 		Timeout: 5 * time.Second,
 		Server:  reportServer{Host: "localhost", Port: 8080},
 		Omit:    "secret",
-	}, configloader.Updates{})
+	}, configloader.LoadReport{})
 
 	got, err := r.TOML()
 	if err != nil {
@@ -64,7 +64,7 @@ func TestReporterTOML(t *testing.T) {
 }
 
 func TestReporterWriteTOMLRejectsNilWriterAndInvalidConfig(t *testing.T) {
-	r := configreporter.New(reportConfig{}, nil)
+	r := configreporter.New(reportConfig{}, configloader.LoadReport{})
 	if err := r.WriteTOML(nil); err == nil || !strings.Contains(err.Error(), "writer is nil") {
 		t.Fatalf("WriteTOML(nil) error = %v, want nil-writer error", err)
 	}
@@ -72,7 +72,7 @@ func TestReporterWriteTOMLRejectsNilWriterAndInvalidConfig(t *testing.T) {
 	type invalidConfig struct {
 		When time.Time
 	}
-	bad := configreporter.New(invalidConfig{}, nil)
+	bad := configreporter.New(invalidConfig{}, configloader.LoadReport{})
 	if _, err := bad.TOML(); err == nil {
 		t.Fatalf("TOML() error = nil for invalid config type")
 	}
@@ -84,7 +84,7 @@ func TestReporterProvenanceHeadersAndRows(t *testing.T) {
 		"debug":         configloader.SourceEnv,
 		`labels["env"]`: configloader.SourceDefault,
 	}
-	r := configreporter.New(reportConfig{}, updates)
+	r := configreporter.New(reportConfig{}, configloader.LoadReport{Updates: updates})
 	updates["debug"] = "mutated"
 	updates["new"] = "mutated"
 

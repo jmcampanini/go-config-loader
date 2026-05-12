@@ -16,13 +16,13 @@ type Reporter[C any] struct {
 	updates configloader.Updates
 }
 
-// New returns a Reporter for config and updates.
+// New returns a Reporter for config and load report metadata.
 //
-// New snapshots updates. The config value is stored by value; map and slice
-// fields follow normal Go value semantics.
-func New[C any](config C, updates configloader.Updates) Reporter[C] {
-	updatesCopy := make(configloader.Updates, len(updates))
-	for path, source := range updates {
+// New snapshots report updates. The config value is stored by value; map and
+// slice fields follow normal Go value semantics.
+func New[C any](config C, report configloader.LoadReport) Reporter[C] {
+	updatesCopy := make(configloader.Updates, len(report.Updates))
+	for path, source := range report.Updates {
 		updatesCopy[path] = source
 	}
 	return Reporter[C]{config: config, updates: updatesCopy}

@@ -36,7 +36,7 @@ func NewEnvironmentLoader[C any](prefix string, env map[string]string) (ConfigLo
 		tracked[i] = envField{field: field, name: name}
 	}
 
-	return func(base C) (C, Updates, error) {
+	return func(base C) (C, LoadReport, error) {
 		type parsedEnv struct {
 			field configmeta.Field
 			value reflect.Value
@@ -50,7 +50,7 @@ func NewEnvironmentLoader[C any](prefix string, env map[string]string) (ConfigLo
 			}
 			value, err := configmeta.ParseText(raw, item.field.Type)
 			if err != nil {
-				return base, nil, fmt.Errorf("configloader: environment variable %s for field %s: %w", item.name, item.field.GoPath, err)
+				return base, LoadReport{}, fmt.Errorf("configloader: environment variable %s for field %s: %w", item.name, item.field.GoPath, err)
 			}
 			parsed = append(parsed, parsedEnv{field: item.field, value: value})
 		}
@@ -63,7 +63,7 @@ func NewEnvironmentLoader[C any](prefix string, env map[string]string) (ConfigLo
 			updates[item.field.GoPath] = SourceEnv
 		}
 
-		return config, updates, nil
+		return config, LoadReport{Updates: updates}, nil
 	}, nil
 }
 

@@ -35,9 +35,9 @@ func newFilesLoader[C any](files []string, pickLast bool, opts ...FileLoaderOpti
 		filesCopy[i] = path
 	}
 
-	return func(base C) (C, Updates, error) {
+	return func(base C) (C, LoadReport, error) {
 		if len(filesCopy) == 0 {
-			return base, Updates{}, nil
+			return base, LoadReport{Updates: Updates{}}, nil
 		}
 
 		if pickLast {
@@ -45,45 +45,44 @@ func newFilesLoader[C any](files []string, pickLast bool, opts ...FileLoaderOpti
 				file := filesCopy[i]
 				exists, err := fileExists(file)
 				if err != nil {
-					return base, nil, err
+					return base, LoadReport{}, err
 				}
 				if !exists {
 					continue
 				}
 				loaded, updates, warnings, err := loadOneTomlFile(base, file, fileOpts)
 				if err != nil {
-					return base, nil, err
+					return base, LoadReport{}, err
 				}
-				emitFileLoaderWarnings(warnings, fileOpts)
-				return loaded, updates, nil
+				return loaded, LoadReport{Updates: updates, LoadedFiles: []string{file}, Warnings: warnings}, nil
 			}
-			return base, Updates{}, nil
+			return base, LoadReport{Updates: Updates{}}, nil
 		}
 
 		config := base
 		updates := Updates{}
+		var loadedFiles []string
 		var warnings []Warning
 		for _, file := range filesCopy {
 			exists, err := fileExists(file)
 			if err != nil {
-				return base, nil, err
+				return base, LoadReport{}, err
 			}
 			if !exists {
 				continue
 			}
 			loaded, fileUpdates, fileWarnings, err := loadOneTomlFile(config, file, fileOpts)
 			if err != nil {
-				return base, nil, err
+				return base, LoadReport{}, err
 			}
 			config = loaded
+			loadedFiles = appendUniqueStrings(loadedFiles, file)
 			warnings = append(warnings, fileWarnings...)
 			for path, source := range fileUpdates {
 				updates[path] = source
 			}
 		}
-		// Delay callbacks until success so warnings describe config that was applied.
-		emitFileLoaderWarnings(warnings, fileOpts)
-		return config, updates, nil
+		return config, LoadReport{Updates: updates, LoadedFiles: loadedFiles, Warnings: warnings}, nil
 	}, nil
 }
 
@@ -123,24 +122,22 @@ func NewRequiredFileLoader[C any](file string, opts ...FileLoaderOption) (Config
 		return nil, err
 	}
 
-	return func(base C) (C, Updates, error) {
+	return func(base C) (C, LoadReport, error) {
 		info, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return base, nil, fmt.Errorf("configloader: required config file %q does not exist", path)
+				return base, LoadReport{}, fmt.Errorf("configloader: required config file %q does not exist", path)
 			}
-			return base, nil, fmt.Errorf("configloader: stat required config file %q: %w", path, err)
+			return base, LoadReport{}, fmt.Errorf("configloader: stat required config file %q: %w", path, err)
 		}
 		if info.IsDir() {
-			return base, nil, fmt.Errorf("configloader: required config file %q is a directory", path)
+			return base, LoadReport{}, fmt.Errorf("configloader: required config file %q is a directory", path)
 		}
 		loaded, updates, warnings, err := loadOneTomlFile(base, path, fileOpts)
 		if err != nil {
-			return base, nil, err
+			return base, LoadReport{}, err
 		}
-		// Delay callbacks until success so warnings describe config that was applied.
-		emitFileLoaderWarnings(warnings, fileOpts)
-		return loaded, updates, nil
+		return loaded, LoadReport{Updates: updates, LoadedFiles: []string{path}, Warnings: warnings}, nil
 	}, nil
 }
 
@@ -165,7 +162,7 @@ func loadOneTomlFile[C any](base C, file string, opts fileLoaderOptions) (C, Upd
 }
 
 func inspectUnknownTomlKeys(file string, metadata toml.MetaData, opts fileLoaderOptions) ([]Warning, error) {
-	if opts.unknownKeyPolicy == UnknownKeyIgnore {
+	if opts.unknownKeyPolicy == unknownKeyIgnore {
 		return nil, nil
 	}
 	undecoded := metadata.Undecoded()
@@ -174,21 +171,12 @@ func inspectUnknownTomlKeys(file string, metadata toml.MetaData, opts fileLoader
 	}
 	message := "contains unknown keys: " + tomlKeysString(undecoded)
 	switch opts.unknownKeyPolicy {
-	case UnknownKeyError:
+	case unknownKeyError:
 		return nil, fmt.Errorf("configloader: config file %q %s", file, message)
-	case UnknownKeyWarn:
+	case unknownKeyWarn:
 		return []Warning{{Source: file, Message: message}}, nil
 	default:
 		return nil, fmt.Errorf("configloader: invalid unknown key policy %d", opts.unknownKeyPolicy)
-	}
-}
-
-func emitFileLoaderWarnings(warnings []Warning, opts fileLoaderOptions) {
-	if opts.warningHandler == nil {
-		return
-	}
-	for _, warning := range warnings {
-		opts.warningHandler(warning)
 	}
 }
 

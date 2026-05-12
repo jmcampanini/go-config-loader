@@ -116,15 +116,15 @@ func TestBoolNoValueFormParsesAsTrue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLoader() error = %v", err)
 	}
-	got, updates, err := loader(pflagBasicConfig{})
+	got, report, err := loader(pflagBasicConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
 	if !got.Debug {
 		t.Fatalf("Debug = false, want true")
 	}
-	if updates["debug"] != pflagloader.SourcePFlag {
-		t.Fatalf("updates[debug] = %q, want SourcePFlag", updates["debug"])
+	if report.Updates["debug"] != pflagloader.SourcePFlag {
+		t.Fatalf("report.Updates[debug] = %q, want SourcePFlag", report.Updates["debug"])
 	}
 }
 
@@ -142,15 +142,15 @@ func TestUnchangedFlagsDoNotUpdateConfigOrProvenance(t *testing.T) {
 		t.Fatalf("NewLoader() error = %v", err)
 	}
 	base := pflagBasicConfig{Name: "default", Debug: true, Ignored: "keep", Nested: pflagNestedConfig{Host: "localhost", Port: 80}}
-	got, updates, err := loader(base)
+	got, report, err := loader(base)
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
 	if !reflect.DeepEqual(got, base) {
 		t.Fatalf("loader() config = %#v, want unchanged %#v", got, base)
 	}
-	if len(updates) != 0 {
-		t.Fatalf("loader() updates = %#v, want empty", updates)
+	if len(report.Updates) != 0 {
+		t.Fatalf("loader() report.Updates = %#v, want empty", report.Updates)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestChangedFlagsUpdateConfigAndCanonicalProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLoader() error = %v", err)
 	}
-	got, updates, err := loader(pflagBasicConfig{Name: "default", Debug: true, Ignored: "keep", Nested: pflagNestedConfig{Host: "localhost", Port: 80}})
+	got, report, err := loader(pflagBasicConfig{Name: "default", Debug: true, Ignored: "keep", Nested: pflagNestedConfig{Host: "localhost", Port: 80}})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -180,11 +180,11 @@ func TestChangedFlagsUpdateConfigAndCanonicalProvenance(t *testing.T) {
 		"name":        pflagloader.SourcePFlag,
 		"nested.host": pflagloader.SourcePFlag,
 	}
-	if !reflect.DeepEqual(updates, wantUpdates) {
-		t.Fatalf("loader() updates = %#v, want %#v", updates, wantUpdates)
+	if !reflect.DeepEqual(report.Updates, wantUpdates) {
+		t.Fatalf("loader() report.Updates = %#v, want %#v", report.Updates, wantUpdates)
 	}
-	if _, ok := updates["host-name"]; ok {
-		t.Fatalf("updates used config tag instead of canonical Go path")
+	if _, ok := report.Updates["host-name"]; ok {
+		t.Fatalf("report.Updates used config tag instead of canonical Go path")
 	}
 }
 
@@ -205,7 +205,7 @@ func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewLoader() error = %v", err)
 	}
-	got, updates, err := loader(config{Profiles: []string{"abc"}})
+	got, report, err := loader(config{Profiles: []string{"abc"}})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -214,8 +214,8 @@ func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
 	}
-	if updates["profiles"] != pflagloader.SourcePFlag {
-		t.Fatalf("updates[profiles] = %q, want SourcePFlag", updates["profiles"])
+	if report.Updates["profiles"] != pflagloader.SourcePFlag {
+		t.Fatalf("report.Updates[profiles] = %q, want SourcePFlag", report.Updates["profiles"])
 	}
 }
 
@@ -269,7 +269,7 @@ func TestAllSupportedScalarTypesParseFromFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLoader() error = %v", err)
 	}
-	got, updates, err := loader(pflagAllScalarsConfig{})
+	got, report, err := loader(pflagAllScalarsConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -295,8 +295,8 @@ func TestAllSupportedScalarTypesParseFromFlags(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
 	}
-	if len(updates) != 16 {
-		t.Fatalf("len(updates) = %d, want 16", len(updates))
+	if len(report.Updates) != 16 {
+		t.Fatalf("len(report.Updates) = %d, want 16", len(report.Updates))
 	}
 }
 
@@ -314,15 +314,15 @@ func TestParseFailureReturnsErrorWithoutPartialUpdate(t *testing.T) {
 		t.Fatalf("NewLoader() error = %v", err)
 	}
 	base := pflagBasicConfig{Name: "default"}
-	got, updates, err := loader(base)
+	got, report, err := loader(base)
 	if err == nil {
 		t.Fatalf("loader() error = nil")
 	}
 	if !reflect.DeepEqual(got, base) {
 		t.Fatalf("loader() config = %#v, want unchanged %#v", got, base)
 	}
-	if updates != nil {
-		t.Fatalf("loader() updates = %#v, want nil", updates)
+	if report.Updates != nil {
+		t.Fatalf("loader() report.Updates = %#v, want nil", report.Updates)
 	}
 }
 

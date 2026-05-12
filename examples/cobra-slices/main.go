@@ -53,15 +53,15 @@ func newRootCommand(out io.Writer) (*cobra.Command, error) {
 				return err
 			}
 
-			cfg, updates, err := configloader.Load(defaultConfig, fileLoader, envLoader, flagLoader)
+			cfg, report, err := configloader.Load(defaultConfig, fileLoader, envLoader, flagLoader)
 			if err != nil {
 				return err
 			}
 
-			fmt.Fprintf(out, "default_only_profiles=%v source=%s\n", cfg.DefaultOnlyProfiles, updates["defaultonlyprofiles"])
-			fmt.Fprintf(out, "file_profiles=%v source=%s\n", cfg.FileProfiles, updates["fileprofiles"])
-			fmt.Fprintf(out, "env_profiles=%v source=%s\n", cfg.EnvProfiles, updates["envprofiles"])
-			fmt.Fprintf(out, "flag_profiles=%v source=%s\n", cfg.FlagProfiles, updates["flagprofiles"])
+			fmt.Fprintf(out, "default_only_profiles=%v source=%s\n", cfg.DefaultOnlyProfiles, report.Updates["defaultonlyprofiles"])
+			fmt.Fprintf(out, "file_profiles=%v source=%s\n", cfg.FileProfiles, report.Updates["fileprofiles"])
+			fmt.Fprintf(out, "env_profiles=%v source=%s\n", cfg.EnvProfiles, report.Updates["envprofiles"])
+			fmt.Fprintf(out, "flag_profiles=%v source=%s\n", cfg.FlagProfiles, report.Updates["flagprofiles"])
 			return nil
 		},
 	}

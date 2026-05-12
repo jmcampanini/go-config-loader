@@ -45,14 +45,14 @@ func newRootCommand(out io.Writer) (*cobra.Command, error) {
 				return err
 			}
 
-			cfg, updates, err := configloader.Load(defaultConfig, fileLoader, envLoader, flagLoader)
+			cfg, report, err := configloader.Load(defaultConfig, fileLoader, envLoader, flagLoader)
 			if err != nil {
 				return err
 			}
 
-			fmt.Fprintf(out, "name=%s source=%s\n", cfg.Name, updates["name"])
-			fmt.Fprintf(out, "debug=%t source=%s\n", cfg.Debug, updates["debug"])
-			fmt.Fprintf(out, "port=%d source=%s\n", cfg.Port, updates["port"])
+			fmt.Fprintf(out, "name=%s source=%s\n", cfg.Name, report.Updates["name"])
+			fmt.Fprintf(out, "debug=%t source=%s\n", cfg.Debug, report.Updates["debug"])
+			fmt.Fprintf(out, "port=%d source=%s\n", cfg.Port, report.Updates["port"])
 			return nil
 		},
 	}

@@ -53,15 +53,15 @@ func TestTomlFileLoaderEmptyListsAreNoOp(t *testing.T) {
 				t.Fatalf("constructor() error = %v", err)
 			}
 			defaults := tomlFileConfig{Name: "default"}
-			got, updates, err := loader(defaults)
+			got, report, err := loader(defaults)
 			if err != nil {
 				t.Fatalf("loader() error = %v", err)
 			}
 			if !reflect.DeepEqual(got, defaults) {
 				t.Fatalf("loader() config = %#v, want %#v", got, defaults)
 			}
-			if len(updates) != 0 {
-				t.Fatalf("loader() updates = %#v, want empty", updates)
+			if len(report.Updates) != 0 {
+				t.Fatalf("loader() report.Updates = %#v, want empty", report.Updates)
 			}
 		})
 	}
@@ -85,15 +85,15 @@ func TestTomlFileLoaderConstructorRejectsEmptyPathsAndCopiesSlice(t *testing.T) 
 	}
 	files[0] = second
 
-	got, updates, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
 	if got.Name != "first" {
 		t.Fatalf("loader() Name = %q, want first", got.Name)
 	}
-	if updates["name"] != first {
-		t.Fatalf("updates[name] = %q, want %q", updates["name"], first)
+	if report.Updates["name"] != first {
+		t.Fatalf("report.Updates[name] = %q, want %q", report.Updates["name"], first)
 	}
 }
 
@@ -108,12 +108,12 @@ func TestTomlFileLoaderMissingMalformedUnknownAndExtensionHandling(t *testing.T)
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{Name: "default"})
+	got, report, err := loader(tomlFileConfig{Name: "default"})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "loaded" || updates["name"] != validNoExt {
-		t.Fatalf("loader() got Name=%q updates=%#v, want loaded from %q", got.Name, updates, validNoExt)
+	if got.Name != "loaded" || report.Updates["name"] != validNoExt {
+		t.Fatalf("loader() got Name=%q report.Updates=%#v, want loaded from %q", got.Name, report.Updates, validNoExt)
 	}
 
 	badLoader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{malformed})
@@ -134,83 +134,96 @@ func TestTomlFileLoaderMissingMalformedUnknownAndExtensionHandling(t *testing.T)
 }
 
 func TestFileLoaderUnknownKeyOptionsValidation(t *testing.T) {
-	if _, err := configloader.NewMergeAllFilesLoader[tomlFileConfig](nil, configloader.WithUnknownKeys(configloader.UnknownKeyWarn)); err == nil || !strings.Contains(err.Error(), "warning handler") {
-		t.Fatalf("NewMergeAllFilesLoader(UnknownKeyWarn without handler) error = %v, want warning-handler error", err)
-	}
-	if _, err := configloader.NewPickLastFileLoader[tomlFileConfig](nil, configloader.WithUnknownKeys(configloader.UnknownKeyPolicy(99))); err == nil || !strings.Contains(err.Error(), "invalid unknown key policy") {
-		t.Fatalf("NewPickLastFileLoader(invalid policy) error = %v, want invalid-policy error", err)
+	if _, err := configloader.NewMergeAllFilesLoader[tomlFileConfig](nil, configloader.WarnUnknownKeys()); err != nil {
+		t.Fatalf("NewMergeAllFilesLoader(WarnUnknownKeys) error = %v, want nil", err)
 	}
 	if _, err := configloader.NewRequiredFileLoader[tomlFileConfig]("config.toml", nil); err == nil || !strings.Contains(err.Error(), "option at index 0 is nil") {
 		t.Fatalf("NewRequiredFileLoader(nil option) error = %v, want nil-option error", err)
 	}
 	if _, err := configloader.NewMergeAllFilesLoader[tomlFileConfig](nil,
-		configloader.WithWarningHandler(nil),
-		configloader.WithWarningHandler(func(configloader.Warning) {}),
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-	); err != nil {
-		t.Fatalf("NewMergeAllFilesLoader(repeated handlers) error = %v, want nil", err)
-	}
-	if _, err := configloader.NewMergeAllFilesLoader[tomlFileConfig](nil,
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(configloader.Warning) {}),
-		configloader.WithUnknownKeys(configloader.UnknownKeyIgnore),
+		configloader.WarnUnknownKeys(),
+		configloader.IgnoreUnknownKeys(),
 	); err != nil {
 		t.Fatalf("NewMergeAllFilesLoader(last policy wins) error = %v, want nil", err)
+	}
+}
+
+func TestTomlFileLoaderReportsLoadedFilesEvenWithoutUpdates(t *testing.T) {
+	dir := t.TempDir()
+	empty := writeTestFile(t, dir, "empty.toml", "")
+	unknownOnly := writeTestFile(t, dir, "unknown.toml", "extra = true\n")
+	missing := filepath.Join(dir, "missing.toml")
+
+	loader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{missing, empty, unknownOnly, empty},
+		configloader.IgnoreUnknownKeys(),
+	)
+	if err != nil {
+		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
+	}
+	got, report, err := loader(tomlFileConfig{Name: "default"})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	if got.Name != "default" {
+		t.Fatalf("loader() Name = %q, want default", got.Name)
+	}
+	if len(report.Updates) != 0 {
+		t.Fatalf("updates = %#v, want none", report.Updates)
+	}
+	wantLoadedFiles := []string{empty, unknownOnly}
+	if !reflect.DeepEqual(report.LoadedFiles, wantLoadedFiles) {
+		t.Fatalf("LoadedFiles = %#v, want %#v", report.LoadedFiles, wantLoadedFiles)
 	}
 }
 
 func TestFileLoaderUnknownKeyIgnoreAppliesKnownKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := writeTestFile(t, dir, "config.toml", "name = 'loaded'\nextra = true\n")
-	var warnings []configloader.Warning
 	loader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{path},
-		configloader.WithUnknownKeys(configloader.UnknownKeyIgnore),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.IgnoreUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{Name: "default"})
+	got, report, err := loader(tomlFileConfig{Name: "default"})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "loaded" || updates["name"] != path {
-		t.Fatalf("loader() config=%#v updates=%#v, want known key applied", got, updates)
+	if got.Name != "loaded" || report.Updates["name"] != path {
+		t.Fatalf("loader() config=%#v report.Updates=%#v, want known key applied", got, report.Updates)
 	}
-	if len(warnings) != 0 {
-		t.Fatalf("warnings = %#v, want none", warnings)
+	if len(report.Warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", report.Warnings)
 	}
 }
 
 func TestFileLoaderUnknownKeyWarnAppliesKnownKeysAndReportsWarning(t *testing.T) {
 	dir := t.TempDir()
 	path := writeTestFile(t, dir, "config.toml", "extra_b = true\nname = 'loaded'\nextra_a = false\n")
-	var warnings []configloader.Warning
 	loader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{path},
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.WarnUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "loaded" || updates["name"] != path {
-		t.Fatalf("loader() config=%#v updates=%#v, want known key applied", got, updates)
+	if got.Name != "loaded" || report.Updates["name"] != path {
+		t.Fatalf("loader() config=%#v report.Updates=%#v, want known key applied", got, report.Updates)
 	}
 	wantWarnings := []configloader.Warning{{Source: path, Message: "contains unknown keys: extra_a, extra_b"}}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Fatalf("warnings = %#v, want %#v", warnings, wantWarnings)
+	if !reflect.DeepEqual(report.Warnings, wantWarnings) {
+		t.Fatalf("warnings = %#v, want %#v", report.Warnings, wantWarnings)
 	}
 
-	warnings = nil
-	if _, _, err := loader(tomlFileConfig{}); err != nil {
+	_, secondReport, err := loader(tomlFileConfig{})
+	if err != nil {
 		t.Fatalf("second loader() error = %v", err)
 	}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Fatalf("second warnings = %#v, want %#v", warnings, wantWarnings)
+	if !reflect.DeepEqual(secondReport.Warnings, wantWarnings) {
+		t.Fatalf("second warnings = %#v, want %#v", secondReport.Warnings, wantWarnings)
 	}
 }
 
@@ -225,7 +238,7 @@ srv = { port = 9090 }
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{Server: tomlServerConfig{Host: "default-host"}})
+	got, report, err := loader(tomlFileConfig{Server: tomlServerConfig{Host: "default-host"}})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -233,8 +246,8 @@ srv = { port = 9090 }
 		t.Fatalf("loader() config = %#v", got)
 	}
 	wantUpdates := configloader.Updates{"name": path, "fileonly": path, "server.port": path}
-	if !reflect.DeepEqual(updates, wantUpdates) {
-		t.Fatalf("updates = %#v, want %#v", updates, wantUpdates)
+	if !reflect.DeepEqual(report.Updates, wantUpdates) {
+		t.Fatalf("report.Updates = %#v, want %#v", report.Updates, wantUpdates)
 	}
 
 	bad := writeTestFile(t, dir, "bad-config-tag.toml", "env-only = 'not a toml key'\n")
@@ -281,7 +294,7 @@ host = "staging.example.com"
 		Tags: []string{"default", "tags"},
 		Pair: [2]int{1, 2},
 	}
-	got, updates, err := loader(defaults)
+	got, report, err := loader(defaults)
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -313,8 +326,8 @@ host = "staging.example.com"
 		`servers["staging"].host`: path,
 		`servers["staging"].port`: path,
 	}
-	if !reflect.DeepEqual(updates, wantUpdates) {
-		t.Fatalf("updates = %#v, want %#v", updates, wantUpdates)
+	if !reflect.DeepEqual(report.Updates, wantUpdates) {
+		t.Fatalf("report.Updates = %#v, want %#v", report.Updates, wantUpdates)
 	}
 }
 
@@ -326,15 +339,15 @@ func TestTomlMergeAllPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
 	if got.Name != "high" || got.Server.Host != "low-host" || got.Server.Port != 443 {
 		t.Fatalf("loader() config = %#v", got)
 	}
-	if updates["name"] != high || updates["server.host"] != low || updates["server.port"] != high {
-		t.Fatalf("updates = %#v", updates)
+	if report.Updates["name"] != high || report.Updates["server.host"] != low || report.Updates["server.port"] != high {
+		t.Fatalf("report.Updates = %#v", report.Updates)
 	}
 }
 
@@ -342,15 +355,13 @@ func TestFileLoaderMergeAllWarningsAreBufferedAndOrdered(t *testing.T) {
 	dir := t.TempDir()
 	low := writeTestFile(t, dir, "low", "name = 'low'\nextra_b = true\n")
 	high := writeTestFile(t, dir, "high", "debug = true\nextra_a = true\n")
-	var warnings []configloader.Warning
 	loader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{low, high},
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.WarnUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, _, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -361,28 +372,32 @@ func TestFileLoaderMergeAllWarningsAreBufferedAndOrdered(t *testing.T) {
 		{Source: low, Message: "contains unknown keys: extra_b"},
 		{Source: high, Message: "contains unknown keys: extra_a"},
 	}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Fatalf("warnings = %#v, want %#v", warnings, wantWarnings)
+	if !reflect.DeepEqual(report.Warnings, wantWarnings) {
+		t.Fatalf("warnings = %#v, want %#v", report.Warnings, wantWarnings)
+	}
+	if !reflect.DeepEqual(report.LoadedFiles, []string{low, high}) {
+		t.Fatalf("loaded files = %#v, want %#v", report.LoadedFiles, []string{low, high})
 	}
 
 	badHigh := writeTestFile(t, dir, "bad-high", "name = [\n")
-	warnings = nil
 	badLoader, err := configloader.NewMergeAllFilesLoader[tomlFileConfig]([]string{low, badHigh},
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.WarnUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader(badHigh) error = %v", err)
 	}
-	got, _, err = badLoader(tomlFileConfig{Name: "base"})
+	got, report, err = badLoader(tomlFileConfig{Name: "base"})
 	if err == nil {
 		t.Fatalf("badLoader() error = nil, want malformed-file error")
 	}
 	if got.Name != "base" {
 		t.Fatalf("badLoader() got.Name = %q, want original base", got.Name)
 	}
-	if len(warnings) != 0 {
-		t.Fatalf("warnings after failed merge = %#v, want none", warnings)
+	if len(report.Warnings) != 0 {
+		t.Fatalf("warnings after failed merge = %#v, want none", report.Warnings)
+	}
+	if len(report.LoadedFiles) != 0 {
+		t.Fatalf("loaded files after failed merge = %#v, want none", report.LoadedFiles)
 	}
 }
 
@@ -395,12 +410,12 @@ func TestTomlPickLastLoadsOnlyHighestPriorityExistingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPickLastFileLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "high" || !reflect.DeepEqual(updates, configloader.Updates{"name": high}) {
-		t.Fatalf("loader() config=%#v updates=%#v, want high only", got, updates)
+	if got.Name != "high" || !reflect.DeepEqual(report.Updates, configloader.Updates{"name": high}) {
+		t.Fatalf("loader() config=%#v report.Updates=%#v, want high only", got, report.Updates)
 	}
 }
 
@@ -408,34 +423,33 @@ func TestFileLoaderPickLastUnknownKeysApplyOnlyToSelectedFile(t *testing.T) {
 	dir := t.TempDir()
 	lowUnknown := writeTestFile(t, dir, "low", "name = 'low'\nextra = true\n")
 	high := writeTestFile(t, dir, "high", "name = 'high'\n")
-	var warnings []configloader.Warning
 	loader, err := configloader.NewPickLastFileLoader[tomlFileConfig]([]string{lowUnknown, high},
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.WarnUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewPickLastFileLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "high" || !reflect.DeepEqual(updates, configloader.Updates{"name": high}) {
-		t.Fatalf("loader() config=%#v updates=%#v, want high only", got, updates)
+	if got.Name != "high" || !reflect.DeepEqual(report.Updates, configloader.Updates{"name": high}) {
+		t.Fatalf("loader() config=%#v report.Updates=%#v, want high only", got, report.Updates)
 	}
-	if len(warnings) != 0 {
-		t.Fatalf("warnings = %#v, want none for lower-priority file", warnings)
+	if len(report.Warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none for lower-priority file", report.Warnings)
+	}
+	if !reflect.DeepEqual(report.LoadedFiles, []string{high}) {
+		t.Fatalf("loaded files = %#v, want %#v", report.LoadedFiles, []string{high})
 	}
 
 	selectedLoader, err := configloader.NewPickLastFileLoader[tomlFileConfig]([]string{lowUnknown, filepath.Join(dir, "missing")},
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.WarnUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewPickLastFileLoader(selected low) error = %v", err)
 	}
-	warnings = nil
-	got, _, err = selectedLoader(tomlFileConfig{})
+	got, report, err = selectedLoader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("selectedLoader() error = %v", err)
 	}
@@ -443,8 +457,8 @@ func TestFileLoaderPickLastUnknownKeysApplyOnlyToSelectedFile(t *testing.T) {
 		t.Fatalf("selectedLoader() Name = %q, want low", got.Name)
 	}
 	wantWarnings := []configloader.Warning{{Source: lowUnknown, Message: "contains unknown keys: extra"}}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Fatalf("warnings = %#v, want %#v", warnings, wantWarnings)
+	if !reflect.DeepEqual(report.Warnings, wantWarnings) {
+		t.Fatalf("warnings = %#v, want %#v", report.Warnings, wantWarnings)
 	}
 }
 
@@ -485,12 +499,12 @@ func TestTomlFileLoadersNormalizePathsToAbsolute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{})
+	got, report, err := loader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "relative" || updates["name"] != expectedPath {
-		t.Fatalf("loader() config=%#v updates=%#v, want source %q", got, updates, expectedPath)
+	if got.Name != "relative" || report.Updates["name"] != expectedPath {
+		t.Fatalf("loader() config=%#v report.Updates=%#v, want source %q", got, report.Updates, expectedPath)
 	}
 }
 
@@ -502,12 +516,12 @@ func TestTomlRequiredFileLoader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRequiredFileLoader() error = %v", err)
 	}
-	got, updates, err := loader(tomlFileConfig{Name: "default"})
+	got, report, err := loader(tomlFileConfig{Name: "default"})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
-	if got.Name != "required" || !reflect.DeepEqual(updates, configloader.Updates{"name": path}) {
-		t.Fatalf("loader() config=%#v updates=%#v, want required file source", got, updates)
+	if got.Name != "required" || !reflect.DeepEqual(report.Updates, configloader.Updates{"name": path}) {
+		t.Fatalf("loader() config=%#v report.Updates=%#v, want required file source", got, report.Updates)
 	}
 }
 
@@ -515,36 +529,34 @@ func TestTomlRequiredFileLoaderUnknownKeyOptions(t *testing.T) {
 	dir := t.TempDir()
 	path := writeTestFile(t, dir, "required.toml", "name = 'required'\nextra = true\n")
 
-	ignoreLoader, err := configloader.NewRequiredFileLoader[tomlFileConfig](path, configloader.WithUnknownKeys(configloader.UnknownKeyIgnore))
+	ignoreLoader, err := configloader.NewRequiredFileLoader[tomlFileConfig](path, configloader.IgnoreUnknownKeys())
 	if err != nil {
 		t.Fatalf("NewRequiredFileLoader(ignore) error = %v", err)
 	}
-	got, updates, err := ignoreLoader(tomlFileConfig{})
+	got, report, err := ignoreLoader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("ignoreLoader() error = %v", err)
 	}
-	if got.Name != "required" || !reflect.DeepEqual(updates, configloader.Updates{"name": path}) {
-		t.Fatalf("ignoreLoader() config=%#v updates=%#v, want known key applied", got, updates)
+	if got.Name != "required" || !reflect.DeepEqual(report.Updates, configloader.Updates{"name": path}) {
+		t.Fatalf("ignoreLoader() config=%#v report.Updates=%#v, want known key applied", got, report.Updates)
 	}
 
-	var warnings []configloader.Warning
 	warnLoader, err := configloader.NewRequiredFileLoader[tomlFileConfig](path,
-		configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-		configloader.WithWarningHandler(func(w configloader.Warning) { warnings = append(warnings, w) }),
+		configloader.WarnUnknownKeys(),
 	)
 	if err != nil {
 		t.Fatalf("NewRequiredFileLoader(warn) error = %v", err)
 	}
-	got, updates, err = warnLoader(tomlFileConfig{})
+	got, report, err = warnLoader(tomlFileConfig{})
 	if err != nil {
 		t.Fatalf("warnLoader() error = %v", err)
 	}
-	if got.Name != "required" || !reflect.DeepEqual(updates, configloader.Updates{"name": path}) {
-		t.Fatalf("warnLoader() config=%#v updates=%#v, want known key applied", got, updates)
+	if got.Name != "required" || !reflect.DeepEqual(report.Updates, configloader.Updates{"name": path}) {
+		t.Fatalf("warnLoader() config=%#v report.Updates=%#v, want known key applied", got, report.Updates)
 	}
 	wantWarnings := []configloader.Warning{{Source: path, Message: "contains unknown keys: extra"}}
-	if !reflect.DeepEqual(warnings, wantWarnings) {
-		t.Fatalf("warnings = %#v, want %#v", warnings, wantWarnings)
+	if !reflect.DeepEqual(report.Warnings, wantWarnings) {
+		t.Fatalf("warnings = %#v, want %#v", report.Warnings, wantWarnings)
 	}
 }
 

@@ -14,13 +14,21 @@ Which means loaders are passed as:
 TOML files, then environment, then flags
 ```
 
-`Load` returns the final config plus an `Updates` map. `Updates` maps canonical Go field paths, such as `server.port` or `labels["env"]`, to the source that last set that value. File sources are reported as absolute paths.
+`Load` returns the final config plus a `LoadReport`. `LoadReport.Updates` maps canonical Go field paths, such as `server.port` or `labels["env"]`, to the source that last set that value. File sources are reported as absolute paths. `LoadReport.LoadedFiles` lists the absolute config file paths that were successfully parsed, deduped in load order. `LoadReport.Warnings` contains non-fatal load diagnostics such as unknown-key warnings. If `Load` returns an error, the config is the zero value and the report is empty; inspect them only after checking that `err == nil`.
 
 The root package supports defaults, TOML files, environment variables, validation, and file-path helpers. CLI flag support lives in `github.com/jmcampanini/go-config-loader/pflagloader` so the root package does not depend on pflag or Cobra. Reporting helpers live in `github.com/jmcampanini/go-config-loader/configreporter`.
 
 ## Configuration structs
 
-Config types must be non-pointer structs. Exported fields are the configuration surface.
+A config type must be a non-pointer struct. Exported fields define the configuration surface. Unexported fields are ignored; anonymous embedded fields are unsupported and rejected by validation.
+
+Requirements:
+
+- The root config type must be a struct, not a pointer.
+- Exported config fields must use supported types.
+- Map keys must be strings.
+- Empty map keys are invalid because they cannot be represented in provenance paths.
+- Fields tagged `toml:"-"` are excluded from TOML loading and TOML reporting.
 
 Supported field types:
 
@@ -33,9 +41,21 @@ Supported field types:
 - slices and arrays of supported element types
 - `map[string]T` where `T` is supported
 
-`config:"..."` tags define the external name used for environment variables and pflags. For example, `config:"api-url"` maps to `MY_APP_API_URL` with the `my-app` env prefix and to the `--api-url` flag. Only scalar leaf fields and slices of scalar leaf fields with a `config` tag are loaded from env or pflags. TOML loading uses `toml:"..."` tags when present, otherwise Go field names. Provenance paths are always derived from Go field names, not tags.
+Tags:
 
-Slice env/pflag contract: values are comma-separated, surrounding whitespace is trimmed from each item, duplicate items are removed while preserving first-seen order, repeated pflags append before deduping, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
+- `toml:"name"` controls the TOML key for file loading and reporting.
+- `toml:"-"` excludes a field from TOML loading and TOML reporting.
+- `config:"name"` controls environment variable and pflag names.
+- `help:"..."` is required for pflag registration on fields with `config` tags.
+
+Source-specific behavior:
+
+- TOML can load exported fields using `toml` tags or Go field names.
+- Environment variables and pflags only load scalar leaf fields and scalar-slice leaf fields with `config` tags.
+- Slice env/pflag values are comma-separated, surrounding whitespace is trimmed from each item, duplicate items are removed while preserving first-seen order, repeated pflags append before deduping, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
+- Provenance paths always use canonical Go field names, not tags.
+
+For example, `Server.Port` is reported as `server.port` even if its TOML key is `listen_port` or its flag is `--port`.
 
 ## Canonical layered loading
 
@@ -63,7 +83,7 @@ func registerFlags(flags *pflag.FlagSet) error {
     return pflagloader.Register[Config](flags)
 }
 
-func loadConfig(flags *pflag.FlagSet) (Config, configloader.Updates) {
+func loadConfig(flags *pflag.FlagSet) (Config, configloader.LoadReport) {
     // Ignoring errors for brevity.
     helper, _ := configloader.NewFileHelper("my-app", "config.toml")
 
@@ -86,10 +106,11 @@ func loadConfig(flags *pflag.FlagSet) (Config, configloader.Updates) {
     flagLoader, _ := pflagloader.NewLoader[Config](flags)
 
     // Load order is low to high priority: files, env, flags.
-    cfg, updates, _ := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
+    cfg, report, _ := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 
-    // updates["server.port"] shows the final source for Config.Server.Port.
-    return cfg, updates
+    // report.Updates["server.port"] shows the final source for Config.Server.Port.
+    // report.LoadedFiles lists config files that were parsed.
+    return cfg, report
 }
 ```
 
@@ -98,8 +119,8 @@ func loadConfig(flags *pflag.FlagSet) (Config, configloader.Updates) {
 `configreporter` formats already-loaded config values and provenance metadata. It does not load or mutate configuration.
 
 ```go
-func reportConfig(cfg Config, updates configloader.Updates, out io.Writer) error {
-    reporter := configreporter.New(cfg, updates)
+func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) error {
+    reporter := configreporter.New(cfg, report)
 
     if err := reporter.WriteTOML(out); err != nil {
         return err
@@ -121,10 +142,10 @@ func reportConfig(cfg Config, updates configloader.Updates, out io.Writer) error
 For an optional custom candidate path, compose the path with the existing file-list loaders:
 
 ```go
-func loadCustomConfig(path string) (Config, configloader.Updates) {
+func loadCustomConfig(path string) (Config, configloader.LoadReport) {
     fileLoader, _ := configloader.NewMergeAllFilesLoader[Config](configloader.File(path))
-    cfg, updates, _ := configloader.Load(defaults, fileLoader)
-    return cfg, updates
+    cfg, report, _ := configloader.Load(defaults, fileLoader)
+    return cfg, report
 }
 ```
 
@@ -134,26 +155,32 @@ By default, config files are strict: unknown keys are errors. To allow extra key
 // Ignore unknown config file keys.
 fileLoader, _ := configloader.NewMergeAllFilesLoader[Config](
     files,
-    configloader.WithUnknownKeys(configloader.UnknownKeyIgnore),
+    configloader.IgnoreUnknownKeys(),
 )
 
-// Log unknown config file keys as warnings.
+// Collect unknown config file keys in report.Warnings.
 fileLoader, _ = configloader.NewMergeAllFilesLoader[Config](
     files,
-    configloader.WithUnknownKeys(configloader.UnknownKeyWarn),
-    configloader.WithWarningHandler(func(w configloader.Warning) {
-        log.Printf("%s: %s", w.Source, w.Message)
-    }),
+    configloader.WarnUnknownKeys(),
 )
+
+cfg, report, err := configloader.Load(defaults, fileLoader)
+if err != nil {
+    return err
+}
+for _, warning := range report.Warnings {
+    log.Printf("%s: %s", warning.Source, warning.Message)
+}
+_ = cfg
 ```
 
 For an explicit `--config` flag that must point to an existing file and should skip all other external sources, use a required file loader:
 
 ```go
-func loadOnlyExplicitConfig(path string) (Config, configloader.Updates, error) {
+func loadOnlyExplicitConfig(path string) (Config, configloader.LoadReport, error) {
     fileLoader, err := configloader.NewRequiredFileLoader[Config](path)
     if err != nil {
-        return Config{}, nil, err
+        return Config{}, configloader.LoadReport{}, err
     }
     return configloader.Load(defaults, fileLoader)
 }
@@ -165,7 +192,7 @@ If your CLI wants `--config` to replace discovered config files but still allow 
 fileLoader, _ := configloader.NewRequiredFileLoader[Config](path)
 envLoader, _ := configloader.NewEnvironmentLoader[Config]("my-app", configloader.OSEnv())
 flagLoader, _ := pflagloader.NewLoader[Config](flags)
-cfg, updates, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
+cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 ```
 
 See the `examples` package for testable examples, `examples/cobra` for isolated Cobra CLI integration, and `examples/cobra-slices` for Cobra slice integration.

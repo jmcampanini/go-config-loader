@@ -60,7 +60,7 @@ host = "0.0.0.0"
 		panic(err)
 	}
 
-	cfg, updates, err := configloader.Load(defaults, fileLoader, envLoader)
+	cfg, report, err := configloader.Load(defaults, fileLoader, envLoader)
 	if err != nil {
 		panic(err)
 	}
@@ -69,10 +69,10 @@ host = "0.0.0.0"
 	fmt.Println(cfg.Debug)
 	fmt.Println(cfg.Server.Host)
 	fmt.Println(cfg.Server.Port)
-	fmt.Println(updates["name"])
-	fmt.Println(updates["debug"])
-	fmt.Println(updates["server.host"] == path)
-	fmt.Println(updates["server.port"])
+	fmt.Println(report.Updates["name"])
+	fmt.Println(report.Updates["debug"])
+	fmt.Println(report.Updates["server.host"] == path)
+	fmt.Println(report.Updates["server.port"])
 
 	// Output:
 	// from-env
@@ -99,7 +99,7 @@ func ExampleLoad_pflags() {
 		panic(err)
 	}
 
-	cfg, updates, err := configloader.Load(
+	cfg, report, err := configloader.Load(
 		exampleConfig{Server: exampleServerConfig{Host: "localhost", Port: 8080}},
 		flagLoader,
 	)
@@ -110,9 +110,9 @@ func ExampleLoad_pflags() {
 	fmt.Println(cfg.Name)
 	fmt.Println(cfg.Server.Host)
 	fmt.Println(cfg.Server.Port)
-	fmt.Println(updates["name"])
-	fmt.Println(updates["server.host"])
-	fmt.Println(updates["server.port"])
+	fmt.Println(report.Updates["name"])
+	fmt.Println(report.Updates["server.host"])
+	fmt.Println(report.Updates["server.port"])
 
 	// Output:
 	// from-flag

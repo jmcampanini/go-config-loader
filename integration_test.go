@@ -124,7 +124,7 @@ port = 9000
 		FlagOnly:    "default-flag-only",
 	}
 
-	got, updates, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
+	got, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -179,13 +179,19 @@ port = 9000
 		`endpoints["canary"].host`:   highFile,
 		`endpoints["canary"].port`:   highFile,
 	}
-	if len(updates) != len(wantSources) {
-		t.Fatalf("len(updates) = %d, want %d (updates: %#v)", len(updates), len(wantSources), updates)
+	if len(report.Updates) != len(wantSources) {
+		t.Fatalf("len(report.Updates) = %d, want %d (updates: %#v)", len(report.Updates), len(wantSources), report.Updates)
 	}
 	for path, wantSource := range wantSources {
-		if gotSource := updates[path]; gotSource != wantSource {
-			t.Fatalf("updates[%q] = %q, want %q (all updates: %#v)", path, gotSource, wantSource, updates)
+		if gotSource := report.Updates[path]; gotSource != wantSource {
+			t.Fatalf("report.Updates[%q] = %q, want %q (all updates: %#v)", path, gotSource, wantSource, report.Updates)
 		}
+	}
+	if !reflect.DeepEqual(report.LoadedFiles, []string{lowFile, highFile}) {
+		t.Fatalf("LoadedFiles = %#v, want %#v", report.LoadedFiles, []string{lowFile, highFile})
+	}
+	if len(report.Warnings) != 0 {
+		t.Fatalf("Warnings = %#v, want none", report.Warnings)
 	}
 }
 

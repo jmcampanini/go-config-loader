@@ -52,7 +52,7 @@ func NewLoader[C any](flags *pflag.FlagSet) (configloader.ConfigLoader[C], error
 		return nil, err
 	}
 
-	return func(base C) (C, configloader.Updates, error) {
+	return func(base C) (C, configloader.LoadReport, error) {
 		type parsedFlag struct {
 			field configmeta.Field
 			value reflect.Value
@@ -62,14 +62,14 @@ func NewLoader[C any](flags *pflag.FlagSet) (configloader.ConfigLoader[C], error
 		for _, field := range fields {
 			flag := flags.Lookup(field.ConfigTag)
 			if flag == nil {
-				return base, nil, fmt.Errorf("pflagloader: expected flag %q for field %s is missing", field.ConfigTag, field.GoPath)
+				return base, configloader.LoadReport{}, fmt.Errorf("pflagloader: expected flag %q for field %s is missing", field.ConfigTag, field.GoPath)
 			}
 			if !flag.Changed {
 				continue
 			}
 			value, err := configmeta.ParseText(flag.Value.String(), field.Type)
 			if err != nil {
-				return base, nil, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
+				return base, configloader.LoadReport{}, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
 			}
 			parsed = append(parsed, parsedFlag{field: field, value: value})
 		}
@@ -82,7 +82,7 @@ func NewLoader[C any](flags *pflag.FlagSet) (configloader.ConfigLoader[C], error
 			updates[item.field.GoPath] = SourcePFlag
 		}
 
-		return config, updates, nil
+		return config, configloader.LoadReport{Updates: updates}, nil
 	}, nil
 }
 

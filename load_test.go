@@ -1,6 +1,7 @@
 package configloader_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func TestLoadDefaultsOnlyReturnsDefaultsAndDefaultProvenance(t *testing.T) {
 		EmptyMap: map[string]string{},
 	}
 
-	got, updates, err := configloader.Load(defaults)
+	got, report, err := configloader.Load(defaults)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -63,13 +64,13 @@ func TestLoadDefaultsOnlyReturnsDefaultsAndDefaultProvenance(t *testing.T) {
 		`servers["prod"].host`: configloader.SourceDefault,
 		`servers["prod"].port`: configloader.SourceDefault,
 	}
-	if !reflect.DeepEqual(updates, wantUpdates) {
-		t.Fatalf("Load() updates = %#v, want %#v", updates, wantUpdates)
+	if !reflect.DeepEqual(report.Updates, wantUpdates) {
+		t.Fatalf("Load() updates = %#v, want %#v", report.Updates, wantUpdates)
 	}
-	if _, ok := updates["nilmap"]; ok {
+	if _, ok := report.Updates["nilmap"]; ok {
 		t.Fatalf("Load() recorded nil map parent provenance")
 	}
-	if _, ok := updates["emptymap"]; ok {
+	if _, ok := report.Updates["emptymap"]; ok {
 		t.Fatalf("Load() recorded empty map parent provenance")
 	}
 }
@@ -78,24 +79,24 @@ func TestLoadRunsLoadersInOrderWithCurrentConfig(t *testing.T) {
 	defaults := loadConfig{Count: 1}
 	var calls []string
 
-	first := func(base loadConfig) (loadConfig, configloader.Updates, error) {
+	first := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
 		calls = append(calls, "first")
 		if base.Count != 1 {
 			t.Fatalf("first loader base.Count = %d, want 1", base.Count)
 		}
 		base.Count = 2
-		return base, configloader.Updates{"count": "first"}, nil
+		return base, configloader.LoadReport{Updates: configloader.Updates{"count": "first"}}, nil
 	}
-	second := func(base loadConfig) (loadConfig, configloader.Updates, error) {
+	second := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
 		calls = append(calls, "second")
 		if base.Count != 2 {
 			t.Fatalf("second loader base.Count = %d, want 2", base.Count)
 		}
 		base.Count = 3
-		return base, configloader.Updates{"count": "second"}, nil
+		return base, configloader.LoadReport{Updates: configloader.Updates{"count": "second"}}, nil
 	}
 
-	got, updates, err := configloader.Load(defaults, first, second)
+	got, report, err := configloader.Load(defaults, first, second)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -105,44 +106,105 @@ func TestLoadRunsLoadersInOrderWithCurrentConfig(t *testing.T) {
 	if !reflect.DeepEqual(calls, []string{"first", "second"}) {
 		t.Fatalf("loader calls = %#v", calls)
 	}
-	if updates["count"] != "second" {
-		t.Fatalf("updates[count] = %q, want second", updates["count"])
+	if report.Updates["count"] != "second" {
+		t.Fatalf("updates[count] = %q, want second", report.Updates["count"])
 	}
 }
 
 func TestLoadMergesUpdatesLastWriteWinsAndTrustsKeys(t *testing.T) {
-	first := func(base loadConfig) (loadConfig, configloader.Updates, error) {
+	first := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
 		base.Name = "first"
-		return base, configloader.Updates{
+		return base, configloader.LoadReport{Updates: configloader.Updates{
 			"name":            "first",
 			"not.a.real.path": "custom",
-		}, nil
+		}}, nil
 	}
-	second := func(base loadConfig) (loadConfig, configloader.Updates, error) {
+	second := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
 		base.Name = "second"
-		return base, configloader.Updates{"name": "second"}, nil
+		return base, configloader.LoadReport{Updates: configloader.Updates{"name": "second"}}, nil
 	}
 
-	got, updates, err := configloader.Load(loadConfig{}, first, second)
+	got, report, err := configloader.Load(loadConfig{}, first, second)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 	if got.Name != "second" {
 		t.Fatalf("Load() Name = %q, want second", got.Name)
 	}
-	if updates["name"] != "second" {
-		t.Fatalf("updates[name] = %q, want second", updates["name"])
+	if report.Updates["name"] != "second" {
+		t.Fatalf("updates[name] = %q, want second", report.Updates["name"])
 	}
-	if updates["not.a.real.path"] != "custom" {
+	if report.Updates["not.a.real.path"] != "custom" {
 		t.Fatalf("Load() did not trust loader-returned arbitrary update key")
 	}
 }
 
+func TestLoadDedupesLoadedFilesGloballyAndPreservesWarningOrder(t *testing.T) {
+	first := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
+		return base, configloader.LoadReport{
+			LoadedFiles: []string{"/tmp/one.toml", "/tmp/two.toml"},
+			Warnings:    []configloader.Warning{{Source: "/tmp/one.toml", Message: "first"}},
+		}, nil
+	}
+	second := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
+		return base, configloader.LoadReport{
+			LoadedFiles: []string{"/tmp/two.toml", "/tmp/three.toml"},
+			Warnings:    []configloader.Warning{{Source: "/tmp/three.toml", Message: "second"}},
+		}, nil
+	}
+
+	_, report, err := configloader.Load(loadConfig{}, first, second)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	wantFiles := []string{"/tmp/one.toml", "/tmp/two.toml", "/tmp/three.toml"}
+	if !reflect.DeepEqual(report.LoadedFiles, wantFiles) {
+		t.Fatalf("LoadedFiles = %#v, want %#v", report.LoadedFiles, wantFiles)
+	}
+	wantWarnings := []configloader.Warning{
+		{Source: "/tmp/one.toml", Message: "first"},
+		{Source: "/tmp/three.toml", Message: "second"},
+	}
+	if !reflect.DeepEqual(report.Warnings, wantWarnings) {
+		t.Fatalf("Warnings = %#v, want %#v", report.Warnings, wantWarnings)
+	}
+}
+
+func TestLoadReturnsEmptyReportOnLoaderError(t *testing.T) {
+	boom := errors.New("boom")
+	loader := func(base loadConfig) (loadConfig, configloader.LoadReport, error) {
+		base.Name = "changed"
+		return base, configloader.LoadReport{
+			Updates:     configloader.Updates{"name": "loader"},
+			LoadedFiles: []string{"/tmp/config.toml"},
+			Warnings:    []configloader.Warning{{Source: "/tmp/config.toml", Message: "warning"}},
+		}, boom
+	}
+
+	got, report, err := configloader.Load(loadConfig{}, loader)
+	if !errors.Is(err, boom) {
+		t.Fatalf("Load() error = %v, want boom", err)
+	}
+	if !reflect.DeepEqual(got, loadConfig{}) {
+		t.Fatalf("Load() config on error = %#v, want zero", got)
+	}
+	if report.Updates != nil || report.LoadedFiles != nil || report.Warnings != nil {
+		t.Fatalf("Load() report on error = %#v, want empty", report)
+	}
+}
+
 func TestLoadDefaultProvenanceRejectsEmptyMapKeys(t *testing.T) {
-	_, _, err := configloader.Load(loadConfig{
+	got, report, err := configloader.Load(loadConfig{
+		Name:   "non-zero default",
 		Labels: map[string]string{"": "bad"},
 	})
 	if err == nil {
 		t.Fatalf("Load() error = nil")
+	}
+	if !reflect.DeepEqual(got, loadConfig{}) {
+		t.Fatalf("Load() config on error = %#v, want zero", got)
+	}
+	if report.Updates != nil || report.LoadedFiles != nil || report.Warnings != nil {
+		t.Fatalf("Load() report on error = %#v, want empty", report)
 	}
 }

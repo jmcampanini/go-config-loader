@@ -34,7 +34,7 @@ func TestEnvironmentLoaderGeneratesNamesLoadsTaggedLeavesAndCanonicalUpdates(t *
 		t.Fatalf("NewEnvironmentLoader() error = %v", err)
 	}
 
-	got, updates, err := loader(envBasicConfig{
+	got, report, err := loader(envBasicConfig{
 		APIURL:  "default",
 		Ignored: "keep",
 		Nested:  envNestedConfig{Port: 80},
@@ -58,10 +58,10 @@ func TestEnvironmentLoaderGeneratesNamesLoadsTaggedLeavesAndCanonicalUpdates(t *
 		"debug":       configloader.SourceEnv,
 		"nested.host": configloader.SourceEnv,
 	}
-	if !reflect.DeepEqual(updates, wantUpdates) {
-		t.Fatalf("loader() updates = %#v, want %#v", updates, wantUpdates)
+	if !reflect.DeepEqual(report.Updates, wantUpdates) {
+		t.Fatalf("loader() updates = %#v, want %#v", report.Updates, wantUpdates)
 	}
-	if _, ok := updates["api-url"]; ok {
+	if _, ok := report.Updates["api-url"]; ok {
 		t.Fatalf("updates used config tag instead of canonical Go path")
 	}
 }
@@ -98,7 +98,7 @@ func TestLoadWithEnvironmentLoaderKeepsDefaultsForUnsetEnvVars(t *testing.T) {
 		t.Fatalf("NewEnvironmentLoader() error = %v", err)
 	}
 
-	got, updates, err := configloader.Load(config{Message: "default message", Debug: false}, loader)
+	got, report, err := configloader.Load(config{Message: "default message", Debug: false}, loader)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -107,11 +107,11 @@ func TestLoadWithEnvironmentLoaderKeepsDefaultsForUnsetEnvVars(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Load() config = %#v, want %#v", got, want)
 	}
-	if updates["message"] != configloader.SourceEnv {
-		t.Fatalf("updates[message] = %q, want SourceEnv", updates["message"])
+	if report.Updates["message"] != configloader.SourceEnv {
+		t.Fatalf("report.Updates[message] = %q, want SourceEnv", report.Updates["message"])
 	}
-	if updates["debug"] != configloader.SourceDefault {
-		t.Fatalf("updates[debug] = %q, want SourceDefault", updates["debug"])
+	if report.Updates["debug"] != configloader.SourceDefault {
+		t.Fatalf("report.Updates[debug] = %q, want SourceDefault", report.Updates["debug"])
 	}
 }
 
@@ -138,7 +138,7 @@ func TestEnvironmentLoaderParsesEverySupportedScalarType(t *testing.T) {
 		t.Fatalf("NewEnvironmentLoader() error = %v", err)
 	}
 
-	got, updates, err := loader(envAllScalarsConfig{})
+	got, report, err := loader(envAllScalarsConfig{})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -164,8 +164,8 @@ func TestEnvironmentLoaderParsesEverySupportedScalarType(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
 	}
-	if len(updates) != 16 {
-		t.Fatalf("len(updates) = %d, want 16", len(updates))
+	if len(report.Updates) != 16 {
+		t.Fatalf("len(report.Updates) = %d, want 16", len(report.Updates))
 	}
 	if math.Abs(float64(got.Float32-1.5)) > 0 || math.Abs(got.Float64-2.25) > 0 {
 		t.Fatalf("floats did not parse correctly: %#v", got)
@@ -184,7 +184,7 @@ func TestEnvironmentLoaderParsesStringSlices(t *testing.T) {
 		t.Fatalf("NewEnvironmentLoader() error = %v", err)
 	}
 
-	got, updates, err := loader(config{Profiles: []string{"abc"}})
+	got, report, err := loader(config{Profiles: []string{"abc"}})
 	if err != nil {
 		t.Fatalf("loader() error = %v", err)
 	}
@@ -193,8 +193,8 @@ func TestEnvironmentLoaderParsesStringSlices(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
 	}
-	if updates["profiles"] != configloader.SourceEnv {
-		t.Fatalf("updates[profiles] = %q, want SourceEnv", updates["profiles"])
+	if report.Updates["profiles"] != configloader.SourceEnv {
+		t.Fatalf("report.Updates[profiles] = %q, want SourceEnv", report.Updates["profiles"])
 	}
 }
 
@@ -208,15 +208,15 @@ func TestEnvironmentLoaderParseFailureReturnsErrorWithoutApplyingPartialUpdate(t
 	}
 
 	base := envBasicConfig{APIURL: "default"}
-	got, updates, err := loader(base)
+	got, report, err := loader(base)
 	if err == nil {
 		t.Fatalf("loader() error = nil")
 	}
 	if !reflect.DeepEqual(got, base) {
 		t.Fatalf("loader() config = %#v, want unchanged %#v", got, base)
 	}
-	if updates != nil {
-		t.Fatalf("loader() updates = %#v, want nil", updates)
+	if report.Updates != nil {
+		t.Fatalf("loader() updates = %#v, want nil", report.Updates)
 	}
 }
 
@@ -249,7 +249,7 @@ func TestEnvironmentLoaderEmptyStringCountsAsSet(t *testing.T) {
 		t.Fatalf("NewEnvironmentLoader() error = %v", err)
 	}
 
-	got, updates, err := loader(struct {
+	got, report, err := loader(struct {
 		Name string `config:"name"`
 	}{Name: "default"})
 	if err != nil {
@@ -258,8 +258,8 @@ func TestEnvironmentLoaderEmptyStringCountsAsSet(t *testing.T) {
 	if got.Name != "" {
 		t.Fatalf("Name = %q, want empty string", got.Name)
 	}
-	if updates["name"] != configloader.SourceEnv {
-		t.Fatalf("updates[name] = %q, want SourceEnv", updates["name"])
+	if report.Updates["name"] != configloader.SourceEnv {
+		t.Fatalf("report.Updates[name] = %q, want SourceEnv", report.Updates["name"])
 	}
 }
 
