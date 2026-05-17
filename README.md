@@ -45,14 +45,16 @@ Tags:
 
 - `toml:"name"` controls the TOML key for file loading and reporting.
 - `toml:"-"` excludes a field from TOML loading and TOML reporting.
-- `config:"name"` controls environment variable and pflag names.
+- `config:"name"` controls environment variable and canonical pflag names.
+- `pflag_singular:"name"` adds an explicit pflag-only singular alias for scalar-slice fields with `config` tags.
 - `help:"..."` is required for pflag registration on fields with `config` tags.
 
 Source-specific behavior:
 
 - TOML can load exported fields using `toml` tags or Go field names.
 - Environment variables and pflags only load scalar leaf fields and scalar-slice leaf fields with `config` tags.
-- Slice env/pflag values are comma-separated, surrounding whitespace is trimmed from each item, duplicate items are removed while preserving first-seen order, repeated pflags append before deduping, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
+- Slice env/canonical pflag values are comma-separated, surrounding whitespace is trimmed from each item, duplicate items are removed while preserving first-seen order, repeated pflags append before deduping, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
+- `pflag_singular` is pflag-only; it does not change TOML keys or environment variable names, and names are never inferred from plurals. Singular pflags append one trimmed scalar value per occurrence, reject empty values, and do not split commas. If both canonical and singular slice pflags are present, canonical values are applied first, then singular values in pflag parse order; no global ordering is guaranteed between the two flag names.
 - Provenance paths always use canonical Go field names, not tags.
 
 For example, `Server.Port` is reported as `server.port` even if its TOML key is `listen_port` or its flag is `--port`.
