@@ -245,18 +245,14 @@ func validatePFlagNameCollisions(fields []pflagField) error {
 
 func parseFlagValue(field pflagField, canonicalFlag, singularFlag *pflag.Flag) (reflect.Value, error) {
 	if field.SingularTag == "" {
-		value, err := configmeta.ParseText(canonicalFlag.Value.String(), field.Type)
-		if err != nil {
-			return reflect.Value{}, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
-		}
-		return value, nil
+		return parseCanonicalFlagValue(field, canonicalFlag)
 	}
 
 	combined := reflect.MakeSlice(field.Type, 0, 0)
 	if canonicalFlag.Changed {
-		canonicalValue, err := configmeta.ParseText(canonicalFlag.Value.String(), field.Type)
+		canonicalValue, err := parseCanonicalFlagValue(field, canonicalFlag)
 		if err != nil {
-			return reflect.Value{}, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
+			return reflect.Value{}, err
 		}
 		combined = reflect.AppendSlice(combined, canonicalValue)
 	}
@@ -276,6 +272,36 @@ func parseFlagValue(field pflagField, canonicalFlag, singularFlag *pflag.Flag) (
 	}
 
 	return dedupeSlice(combined), nil
+}
+
+func parseCanonicalFlagValue(field pflagField, flag *pflag.Flag) (reflect.Value, error) {
+	if field.Type.Kind() == reflect.Slice {
+		if sliceValue, ok := flag.Value.(pflag.SliceValue); ok {
+			value, err := parseCanonicalSliceItems(sliceValue.GetSlice(), field.Type)
+			if err != nil {
+				return reflect.Value{}, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
+			}
+			return value, nil
+		}
+	}
+
+	value, err := configmeta.ParseText(flag.Value.String(), field.Type)
+	if err != nil {
+		return reflect.Value{}, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
+	}
+	return value, nil
+}
+
+func parseCanonicalSliceItems(texts []string, typ reflect.Type) (reflect.Value, error) {
+	parsed := reflect.MakeSlice(typ, 0, len(texts))
+	for _, text := range texts {
+		value, err := configmeta.ParseScalar(strings.TrimSpace(text), typ.Elem())
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		parsed = reflect.Append(parsed, value)
+	}
+	return dedupeSlice(parsed), nil
 }
 
 func dedupeSlice(value reflect.Value) reflect.Value {

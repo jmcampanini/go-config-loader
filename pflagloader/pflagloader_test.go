@@ -219,6 +219,95 @@ func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) 
 	}
 }
 
+func TestExistingStringSliceVarLoadsParsedSliceValue(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles" help:"profile names"`
+	}
+
+	flags := newFlagSet(t)
+	var profiles []string
+	flags.StringSliceVar(&profiles, "profiles", nil, "profile names")
+	if err := flags.Parse([]string{"--profiles=work,vpn", "--profiles=personal,work"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[config](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, report, err := loader(config{Profiles: []string{"default"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+
+	want := config{Profiles: []string{"work", "vpn", "personal"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+	if report.Updates["profiles"] != pflagloader.SourcePFlag {
+		t.Fatalf("report.Updates[profiles] = %q, want SourcePFlag", report.Updates["profiles"])
+	}
+	if len(report.Updates) != 1 {
+		t.Fatalf("report.Updates = %#v, want only profiles update", report.Updates)
+	}
+}
+
+func TestExistingStringSliceVarUnchangedDoesNotUpdate(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles" help:"profile names"`
+	}
+
+	flags := newFlagSet(t)
+	var profiles []string
+	flags.StringSliceVar(&profiles, "profiles", nil, "profile names")
+	if err := flags.Parse(nil); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[config](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	base := config{Profiles: []string{"default"}}
+	got, report, err := loader(base)
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	if !reflect.DeepEqual(got, base) {
+		t.Fatalf("loader() config = %#v, want unchanged %#v", got, base)
+	}
+	if len(report.Updates) != 0 {
+		t.Fatalf("loader() report.Updates = %#v, want empty", report.Updates)
+	}
+}
+
+func TestExistingStringSliceVarHonorsPflagCSVQuoting(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles" help:"profile names"`
+	}
+
+	flags := newFlagSet(t)
+	var profiles []string
+	flags.StringSliceVar(&profiles, "profiles", nil, "profile names")
+	if err := flags.Parse([]string{`--profiles=work,"vpn,home"`}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[config](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(config{})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+
+	want := config{Profiles: []string{"work", "vpn,home"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+}
+
 type pflagAllScalarsConfig struct {
 	String   string        `config:"string" help:"string"`
 	Bool     bool          `config:"bool" help:"bool"`
