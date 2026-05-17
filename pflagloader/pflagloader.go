@@ -119,16 +119,20 @@ func taggedPFlagFields[C any]() ([]pflagField, error) {
 	if t == nil || t.Kind() != reflect.Struct {
 		return nil, configmeta.ValidateType(t)
 	}
-	if err := validatePFlagSingularUsage(t, ""); err != nil {
-		return nil, err
-	}
-	if err := configmeta.ValidateType(t); err != nil {
+
+	singularTags := make(map[[2]string]string)
+	if err := collectSingularTags(t, "", true, nil, singularTags); err != nil {
 		return nil, err
 	}
 
-	var fields []pflagField
-	if err := collectPFlagFields(t, "", nil, &fields); err != nil {
+	canonicalFields, err := configmeta.TaggedScalarFields[C]()
+	if err != nil {
 		return nil, err
+	}
+
+	fields := make([]pflagField, len(canonicalFields))
+	for i, field := range canonicalFields {
+		fields[i] = pflagField{Field: field, SingularTag: singularTags[[2]string{field.GoPath, field.ConfigTag}]}
 	}
 	if err := validatePFlagNameCollisions(fields); err != nil {
 		return nil, err
@@ -136,11 +140,7 @@ func taggedPFlagFields[C any]() ([]pflagField, error) {
 	return fields, nil
 }
 
-func validatePFlagSingularUsage(t reflect.Type, prefix string) error {
-	return validatePFlagSingularUsageIn(t, prefix, true, nil)
-}
-
-func validatePFlagSingularUsageIn(t reflect.Type, prefix string, addressable bool, stack []reflect.Type) error {
+func collectSingularTags(t reflect.Type, prefix string, addressable bool, stack []reflect.Type, out map[[2]string]string) error {
 	if t == reflect.TypeOf(time.Time{}) {
 		return nil
 	}
@@ -154,7 +154,7 @@ func validatePFlagSingularUsageIn(t reflect.Type, prefix string, addressable boo
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		path := joinPath(prefix, strings.ToLower(f.Name))
-		_, hasSingular := f.Tag.Lookup("pflag_singular")
+		singularTag, hasSingular := f.Tag.Lookup("pflag_singular")
 
 		if f.PkgPath != "" {
 			if hasSingular {
@@ -171,14 +171,14 @@ func validatePFlagSingularUsageIn(t reflect.Type, prefix string, addressable boo
 			if !hasConfig {
 				return fmt.Errorf("pflagloader: field %s has pflag_singular tag without config tag", displayPath(path))
 			}
-			if err := validateSingularTag(path, configTag, f.Tag.Get("pflag_singular"), f.Type); err != nil {
+			if err := validateSingularTag(path, configTag, singularTag, f.Type); err != nil {
 				return err
 			}
-			continue
+			out[[2]string{path, configTag}] = singularTag
 		}
 
 		if !hasConfig {
-			if err := validateNestedPFlagSingularUsage(f.Type, path, addressable, stack); err != nil {
+			if err := collectNestedSingularTags(f.Type, path, addressable, stack, out); err != nil {
 				return err
 			}
 		}
@@ -186,66 +186,17 @@ func validatePFlagSingularUsageIn(t reflect.Type, prefix string, addressable boo
 	return nil
 }
 
-func validateNestedPFlagSingularUsage(t reflect.Type, prefix string, addressable bool, stack []reflect.Type) error {
+func collectNestedSingularTags(t reflect.Type, prefix string, addressable bool, stack []reflect.Type, out map[[2]string]string) error {
 	switch t.Kind() {
 	case reflect.Struct:
-		return validatePFlagSingularUsageIn(t, prefix, addressable, stack)
+		return collectSingularTags(t, prefix, addressable, stack, out)
 	case reflect.Slice, reflect.Array:
-		return validateNestedPFlagSingularUsage(t.Elem(), prefix+"[]", false, stack)
+		return collectNestedSingularTags(t.Elem(), prefix+"[]", false, stack, out)
 	case reflect.Map:
-		return validateNestedPFlagSingularUsage(t.Elem(), prefix+"[\"...\"]", false, stack)
+		return collectNestedSingularTags(t.Elem(), prefix+"[\"...\"]", false, stack, out)
 	default:
 		return nil
 	}
-}
-
-func collectPFlagFields(t reflect.Type, prefix string, index []int, out *[]pflagField) error {
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		path := joinPath(prefix, strings.ToLower(f.Name))
-		fieldIndex := append(append([]int(nil), index...), i)
-		_, hasSingular := f.Tag.Lookup("pflag_singular")
-
-		if f.PkgPath != "" {
-			if hasSingular {
-				return fmt.Errorf("pflagloader: unexported field %s has pflag_singular tag", displayPath(path))
-			}
-			continue
-		}
-
-		configTag, hasConfig := f.Tag.Lookup("config")
-		if hasSingular && !hasConfig {
-			return fmt.Errorf("pflagloader: field %s has pflag_singular tag without config tag", displayPath(path))
-		}
-
-		if hasConfig {
-			field := pflagField{
-				Field: configmeta.Field{
-					GoPath:    path,
-					ConfigTag: configTag,
-					Help:      f.Tag.Get("help"),
-					Index:     fieldIndex,
-					Type:      f.Type,
-				},
-			}
-			if hasSingular {
-				singularTag := f.Tag.Get("pflag_singular")
-				if err := validateSingularTag(path, configTag, singularTag, f.Type); err != nil {
-					return err
-				}
-				field.SingularTag = singularTag
-			}
-			*out = append(*out, field)
-			continue
-		}
-
-		if f.Type.Kind() == reflect.Struct && f.Type != reflect.TypeOf(time.Time{}) {
-			if err := collectPFlagFields(f.Type, path, fieldIndex, out); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func validateSingularTag(path, configTag, singularTag string, typ reflect.Type) error {
@@ -307,7 +258,7 @@ func parseFlagValue(field pflagField, canonicalFlag, singularFlag *pflag.Flag) (
 		if err != nil {
 			return reflect.Value{}, fmt.Errorf("pflagloader: flag %q for field %s: %w", field.ConfigTag, field.GoPath, err)
 		}
-		combined = appendSlice(combined, canonicalValue)
+		combined = reflect.AppendSlice(combined, canonicalValue)
 	}
 
 	if singularFlag != nil && singularFlag.Changed {
@@ -325,13 +276,6 @@ func parseFlagValue(field pflagField, canonicalFlag, singularFlag *pflag.Flag) (
 	}
 
 	return dedupeSlice(combined), nil
-}
-
-func appendSlice(dst, src reflect.Value) reflect.Value {
-	for i := 0; i < src.Len(); i++ {
-		dst = reflect.Append(dst, src.Index(i))
-	}
-	return dst
 }
 
 func dedupeSlice(value reflect.Value) reflect.Value {
