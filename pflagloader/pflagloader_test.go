@@ -339,6 +339,399 @@ func TestMissingExpectedFlagsCauseLoaderErrors(t *testing.T) {
 	}
 }
 
+type pflagSingularProfilesConfig struct {
+	Profiles []string `config:"profiles" pflag_singular:"profile" help:"profile names"`
+}
+
+func TestSingularStringFlagAppendsTrimmedRawValues(t *testing.T) {
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--profile", " alpha ", "--profile=a,b"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[pflagSingularProfilesConfig](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, report, err := loader(pflagSingularProfilesConfig{})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+
+	want := pflagSingularProfilesConfig{Profiles: []string{"alpha", "a,b"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+	if report.Updates["profiles"] != pflagloader.SourcePFlag {
+		t.Fatalf("report.Updates[profiles] = %q, want SourcePFlag", report.Updates["profiles"])
+	}
+}
+
+func TestSingularStringFlagRejectsEmptyValues(t *testing.T) {
+	tests := [][]string{
+		{"--profile="},
+		{"--profile=   "},
+		{"--profile", ""},
+	}
+	for _, args := range tests {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			flags := newFlagSet(t)
+			if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			if err := flags.Parse(args); err == nil {
+				t.Fatalf("Parse(%#v) error = nil", args)
+			}
+		})
+	}
+}
+
+func TestSingularIntFlagParsesOneScalarAndRejectsCSV(t *testing.T) {
+	type config struct {
+		IDs []int `config:"ids" pflag_singular:"id" help:"ids"`
+	}
+
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[config](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--id=1", "--id", "2"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	loader, err := pflagloader.NewLoader[config](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(config{})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	want := config{IDs: []int{1, 2}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+
+	badFlags := newFlagSet(t)
+	if err := pflagloader.Register[config](badFlags); err != nil {
+		t.Fatalf("Register() badFlags error = %v", err)
+	}
+	if err := badFlags.Parse([]string{"--id=1,2"}); err != nil {
+		t.Fatalf("Parse() badFlags error = %v", err)
+	}
+	badLoader, err := pflagloader.NewLoader[config](badFlags)
+	if err != nil {
+		t.Fatalf("NewLoader() badFlags error = %v", err)
+	}
+	if _, _, err := badLoader(config{}); err == nil {
+		t.Fatalf("loader() error = nil for singular int CSV")
+	}
+}
+
+func TestSingularDurationAndBoolFlagsParseOneScalar(t *testing.T) {
+	type config struct {
+		Timeouts []time.Duration `config:"timeouts" pflag_singular:"timeout" help:"timeouts"`
+		Toggles  []bool          `config:"toggles" pflag_singular:"toggle" help:"toggles"`
+	}
+
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[config](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--timeout=1s", "--toggle", "--toggle=false"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	loader, err := pflagloader.NewLoader[config](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(config{})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	want := config{Timeouts: []time.Duration{time.Second}, Toggles: []bool{true, false}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+
+	badFlags := newFlagSet(t)
+	if err := pflagloader.Register[config](badFlags); err != nil {
+		t.Fatalf("Register() badFlags error = %v", err)
+	}
+	if err := badFlags.Parse([]string{"--toggle="}); err == nil {
+		t.Fatalf("Parse() error = nil for empty singular bool")
+	}
+}
+
+func TestCanonicalAndSingularSliceFlagsCombineInWavesAndDedupe(t *testing.T) {
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--profile=c", "--profiles=a,b", "--profile=b", "--profiles=d,a"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[pflagSingularProfilesConfig](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(pflagSingularProfilesConfig{Profiles: []string{"default"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+
+	want := pflagSingularProfilesConfig{Profiles: []string{"a", "b", "d", "c"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+}
+
+func TestSingularOnlyReplacesLowerPrioritySliceValues(t *testing.T) {
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--profile=flag"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[pflagSingularProfilesConfig](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(pflagSingularProfilesConfig{Profiles: []string{"default"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	want := pflagSingularProfilesConfig{Profiles: []string{"flag"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+}
+
+func TestCanonicalEmptySliceFlagCombinesWithSingularValues(t *testing.T) {
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--profiles=", "--profile=flag"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[pflagSingularProfilesConfig](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(pflagSingularProfilesConfig{Profiles: []string{"default"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	want := pflagSingularProfilesConfig{Profiles: []string{"flag"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+}
+
+func TestCanonicalEmptySliceFlagAloneYieldsEmptySlice(t *testing.T) {
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := flags.Parse([]string{"--profiles="}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	loader, err := pflagloader.NewLoader[pflagSingularProfilesConfig](flags)
+	if err != nil {
+		t.Fatalf("NewLoader() error = %v", err)
+	}
+	got, _, err := loader(pflagSingularProfilesConfig{Profiles: []string{"default"}})
+	if err != nil {
+		t.Fatalf("loader() error = %v", err)
+	}
+	want := pflagSingularProfilesConfig{Profiles: []string{}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+}
+
+func TestSingularTagValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		err  func(*testing.T) error
+	}{
+		{
+			name: "without config tag",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `pflag_singular:"profile"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "non slice field",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profile string `config:"profiles" pflag_singular:"profile" help:"profile"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "unsupported slice element",
+			err: func(t *testing.T) error {
+				type config struct {
+					Values [][]string `config:"values" pflag_singular:"value" help:"values"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "nested in slice element",
+			err: func(t *testing.T) error {
+				type item struct {
+					Values []string `config:"values" pflag_singular:"value" help:"values"`
+				}
+				type config struct {
+					Items []item
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "empty name",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `config:"profiles" pflag_singular:"" help:"profiles"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "dash name",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `config:"profiles" pflag_singular:"-" help:"profiles"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "non kebab name",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `config:"profiles" pflag_singular:"Profile" help:"profiles"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "same as canonical",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `config:"profiles" pflag_singular:"profiles" help:"profiles"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "collides with canonical",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `config:"profiles" pflag_singular:"name" help:"profiles"`
+					Name     string   `config:"name" help:"name"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "collides with singular",
+			err: func(t *testing.T) error {
+				type config struct {
+					Profiles []string `config:"profiles" pflag_singular:"item" help:"profiles"`
+					IDs      []int    `config:"ids" pflag_singular:"item" help:"ids"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+		{
+			name: "unexported field",
+			err: func(t *testing.T) error {
+				type config struct {
+					_ []string `pflag_singular:"profile"`
+				}
+				return pflagloader.Register[config](newFlagSet(t))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.err(t); err == nil {
+				t.Fatalf("Register() error = nil")
+			}
+		})
+	}
+}
+
+func TestNewLoaderValidatesSingularTags(t *testing.T) {
+	type config struct {
+		Profiles []string `pflag_singular:"profile"`
+	}
+	if _, err := pflagloader.NewLoader[config](newFlagSet(t)); err == nil {
+		t.Fatalf("NewLoader() error = nil")
+	}
+}
+
+func TestValidateConfigIgnoresPFlagSingularTags(t *testing.T) {
+	type config struct {
+		Profiles []string `pflag_singular:"profile"`
+	}
+	if err := configloader.ValidateConfig[config](); err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+	if err := pflagloader.Register[config](newFlagSet(t)); err == nil {
+		t.Fatalf("Register() error = nil")
+	}
+}
+
+func TestRegisterRejectsExistingSingularFlagWithoutPartialRegistration(t *testing.T) {
+	flags := newFlagSet(t)
+	flags.String("profile", "", "existing singular")
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err == nil {
+		t.Fatalf("Register() error = nil")
+	}
+	if flags.Lookup("profiles") != nil {
+		t.Fatalf("Register() registered canonical flag after singular collision")
+	}
+}
+
+func TestSingularHelpTextIncludesNote(t *testing.T) {
+	flags := newFlagSet(t)
+	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	canonical := flags.Lookup("profiles")
+	if canonical == nil || canonical.Usage != "profile names" || canonical.Value.Type() != "stringSlice" {
+		t.Fatalf("canonical flag = %#v, want help and stringSlice type", canonical)
+	}
+	singular := flags.Lookup("profile")
+	if singular == nil {
+		t.Fatalf("singular flag was not registered")
+	}
+	if singular.Value.Type() != "string" {
+		t.Fatalf("singular type = %q, want string", singular.Value.Type())
+	}
+	if !strings.Contains(singular.Usage, "profile names") || !strings.Contains(singular.Usage, "Adds a single value to the array; empty values are not allowed.") {
+		t.Fatalf("singular Usage = %q, want help plus note", singular.Usage)
+	}
+}
+
 func TestRootPackageDoesNotDependOnPflag(t *testing.T) {
 	cmd := exec.Command("go", "list", "-deps", ".")
 	cmd.Dir = ".."
