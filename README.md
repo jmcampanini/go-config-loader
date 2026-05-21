@@ -18,6 +18,11 @@ TOML files, then environment, then flags
 
 The root package supports defaults, TOML files, environment variables, validation, and file-path helpers. CLI flag support lives in `github.com/jmcampanini/go-config-loader/pflagloader` so the root package does not depend on pflag or Cobra. Reporting helpers live in `github.com/jmcampanini/go-config-loader/configreporter`.
 
+## Adoption guidance
+
+- Treat this library as the loading boundary: use it to layer defaults, files, environment variables, and flags into a config struct, then perform application validation, normalization, and derived/effective-field computation in your own application code.
+- Custom file discovery does not require custom loaders; compose the candidate paths you want, including paths from custom directories, and pass them to the existing file loaders.
+
 ## Configuration structs
 
 A config type must be a non-pointer struct. Exported fields define the configuration surface. Unexported fields are ignored; anonymous embedded fields are unsupported and rejected by validation.

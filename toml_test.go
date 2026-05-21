@@ -133,6 +133,42 @@ func TestTomlFileLoaderMissingMalformedUnknownAndExtensionHandling(t *testing.T)
 	}
 }
 
+func TestTomlOptionalFileLoadersSkipDirectories(t *testing.T) {
+	dir := t.TempDir()
+	low := writeTestFile(t, dir, "low.toml", "name = 'low'\n")
+	highDir := filepath.Join(dir, "high.toml")
+	if err := os.Mkdir(highDir, 0o700); err != nil {
+		t.Fatalf("Mkdir(%q) error = %v", highDir, err)
+	}
+
+	for name, constructor := range map[string]func([]string) (configloader.ConfigLoader[tomlFileConfig], error){
+		"merge-all": func(files []string) (configloader.ConfigLoader[tomlFileConfig], error) {
+			return configloader.NewMergeAllFilesLoader[tomlFileConfig](files)
+		},
+		"pick-last": func(files []string) (configloader.ConfigLoader[tomlFileConfig], error) {
+			return configloader.NewPickLastFileLoader[tomlFileConfig](files)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			loader, err := constructor([]string{low, highDir})
+			if err != nil {
+				t.Fatalf("constructor() error = %v", err)
+			}
+
+			got, report, err := loader(tomlFileConfig{Name: "default"})
+			if err != nil {
+				t.Fatalf("loader() error = %v", err)
+			}
+			if got.Name != "low" {
+				t.Fatalf("loader() Name = %q, want low", got.Name)
+			}
+			if !reflect.DeepEqual(report.LoadedFiles, []string{low}) {
+				t.Fatalf("loader() LoadedFiles = %#v, want [%q]", report.LoadedFiles, low)
+			}
+		})
+	}
+}
+
 func TestFileLoaderUnknownKeyOptionsValidation(t *testing.T) {
 	if _, err := configloader.NewMergeAllFilesLoader[tomlFileConfig](nil, configloader.WarnUnknownKeys()); err != nil {
 		t.Fatalf("NewMergeAllFilesLoader(WarnUnknownKeys) error = %v, want nil", err)

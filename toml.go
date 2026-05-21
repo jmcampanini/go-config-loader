@@ -98,9 +98,9 @@ func normalizeFilePath(path string) (string, error) {
 }
 
 func fileExists(path string) (bool, error) {
-	_, err := os.Stat(path)
+	info, err := os.Stat(path)
 	if err == nil {
-		return true, nil
+		return !info.IsDir(), nil
 	}
 	if os.IsNotExist(err) {
 		return false, nil
