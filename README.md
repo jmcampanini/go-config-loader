@@ -133,8 +133,8 @@ func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) err
         return err
     }
 
-    headers := reporter.ProvenanceHeaders() // []string{"Path", "Source"}
-    rows := reporter.ProvenanceRows()       // sorted [][]string path/source pairs
+    headers := reporter.ProvenanceHeaders() // []string{"Path", "Value", "Source"}
+    rows := reporter.ProvenanceRows()       // sorted [][]string path/value/source triples
 
     // headers and rows can be passed to a table renderer such as Lip Gloss.
     _, _ = headers, rows
@@ -142,7 +142,29 @@ func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) err
 }
 ```
 
-`reporter.TOML()` returns the effective config as `[]byte`. TOML output uses normal TOML tags and omits fields tagged `toml:"-"`.
+`reporter.TOML()` returns the effective config as `[]byte`. TOML output uses normal TOML tags and omits fields tagged `toml:"-"`. Provenance row values are resolved from the effective config using canonical provenance paths; unresolved paths are shown as `<unavailable>`.
+
+Run the complete Lip Gloss provenance-table example in `examples/provenance`:
+
+```sh
+go run ./examples/provenance
+```
+
+It prints a compact provenance table like:
+
+```text
+config file source shown as: config.toml
+
+╭────────────────────┬────────────────────────────────┬─────────────╮
+│ Path               │ Value                          │ Source      │
+├────────────────────┼────────────────────────────────┼─────────────┤
+│ debug              │ true                           │ <env>       │
+│ labels["prod.env"] │ "green"                        │ config.toml │
+│ name               │ "from-flag"                    │ <pflag>     │
+│ profiles           │ ["flag-a", "flag-b", "canary"] │ <pflag>     │
+│ timeout            │ "5s"                           │ <default>   │
+╰────────────────────┴────────────────────────────────┴─────────────╯
+```
 
 ## Loading from a custom file location
 

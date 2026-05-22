@@ -24,6 +24,16 @@ type reportConfig struct {
 	Omit    string        `toml:"-"`
 }
 
+type provenanceConfig struct {
+	Name     string
+	Debug    bool
+	Timeout  time.Duration
+	Profiles []string
+	Pair     [2]int
+	Labels   map[string]string
+	Servers  map[string]reportServer
+}
+
 func TestReporterTOML(t *testing.T) {
 	r := configreporter.New(reportConfig{
 		Name:    "app",
@@ -80,16 +90,30 @@ func TestReporterWriteTOMLRejectsNilWriterAndInvalidConfig(t *testing.T) {
 
 func TestReporterProvenanceHeadersAndRows(t *testing.T) {
 	updates := configloader.Updates{
-		"server.port":   "/tmp/config.toml",
-		"debug":         configloader.SourceEnv,
-		`labels["env"]`: configloader.SourceDefault,
+		"debug":                configloader.SourceEnv,
+		`labels["prod"]`:       configloader.SourceDefault,
+		`labels["prod.env"]`:   configloader.SourceDefault,
+		"name":                 "<pflag>",
+		"not.a.real.path":      "custom",
+		"pair":                 "/tmp/config.toml",
+		"profiles":             "/tmp/config.toml",
+		`servers["prod"].port`: "/tmp/config.toml",
+		"timeout":              configloader.SourceDefault,
 	}
-	r := configreporter.New(reportConfig{}, configloader.LoadReport{Updates: updates})
+	r := configreporter.New(provenanceConfig{
+		Name:     "my app",
+		Debug:    true,
+		Timeout:  5 * time.Second,
+		Profiles: []string{"prod", "canary"},
+		Pair:     [2]int{1, 2},
+		Labels:   map[string]string{"prod": "blue", "prod.env": "green"},
+		Servers:  map[string]reportServer{"prod": {Host: "localhost", Port: 9090}},
+	}, configloader.LoadReport{Updates: updates})
 	updates["debug"] = "mutated"
 	updates["new"] = "mutated"
 
 	headers := r.ProvenanceHeaders()
-	wantHeaders := []string{"Path", "Source"}
+	wantHeaders := []string{"Path", "Value", "Source"}
 	if !reflect.DeepEqual(headers, wantHeaders) {
 		t.Fatalf("ProvenanceHeaders() = %#v, want %#v", headers, wantHeaders)
 	}
@@ -99,15 +123,22 @@ func TestReporterProvenanceHeadersAndRows(t *testing.T) {
 	}
 
 	wantRows := [][]string{
-		{"debug", configloader.SourceEnv},
-		{`labels["env"]`, configloader.SourceDefault},
-		{"server.port", "/tmp/config.toml"},
+		{"debug", "true", configloader.SourceEnv},
+		{`labels["prod"]`, `"blue"`, configloader.SourceDefault},
+		{`labels["prod.env"]`, `"green"`, configloader.SourceDefault},
+		{"name", `"my app"`, "<pflag>"},
+		{"not.a.real.path", "<unavailable>", "custom"},
+		{"pair", "[1, 2]", "/tmp/config.toml"},
+		{"profiles", `["prod", "canary"]`, "/tmp/config.toml"},
+		{`servers["prod"].port`, "9090", "/tmp/config.toml"},
+		{"timeout", `"5s"`, configloader.SourceDefault},
 	}
 	rows := r.ProvenanceRows()
 	if !reflect.DeepEqual(rows, wantRows) {
 		t.Fatalf("ProvenanceRows() = %#v, want %#v", rows, wantRows)
 	}
 	rows[0][1] = "mutated"
+	rows[0][2] = "mutated"
 	if got := r.ProvenanceRows(); !reflect.DeepEqual(got, wantRows) {
 		t.Fatalf("ProvenanceRows() after caller mutation = %#v, want %#v", got, wantRows)
 	}
