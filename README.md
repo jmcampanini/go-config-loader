@@ -225,4 +225,4 @@ flagLoader, _ := pflagloader.NewLoader[Config](flags)
 cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 ```
 
-See the `examples` package for testable examples, `examples/cobra` for isolated Cobra CLI integration, and `examples/cobra-slices` for Cobra slice integration.
+See the `examples` package for testable examples. Full runnable examples are standalone modules under `examples/<name>`; run them with `cd examples/<name> && go run .`. Current runnable examples are `examples/cobra`, `examples/cobra-slices`, and `examples/provenance`.

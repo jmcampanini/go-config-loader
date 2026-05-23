@@ -58,10 +58,18 @@ func newRootCommand(out io.Writer) (*cobra.Command, error) {
 				return err
 			}
 
-			fmt.Fprintf(out, "default_only_profiles=%v source=%s\n", cfg.DefaultOnlyProfiles, report.Updates["defaultonlyprofiles"])
-			fmt.Fprintf(out, "file_profiles=%v source=%s\n", cfg.FileProfiles, report.Updates["fileprofiles"])
-			fmt.Fprintf(out, "env_profiles=%v source=%s\n", cfg.EnvProfiles, report.Updates["envprofiles"])
-			fmt.Fprintf(out, "flag_profiles=%v source=%s\n", cfg.FlagProfiles, report.Updates["flagprofiles"])
+			if _, err := fmt.Fprintf(out, "default_only_profiles=%v source=%s\n", cfg.DefaultOnlyProfiles, report.Updates["defaultonlyprofiles"]); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(out, "file_profiles=%v source=%s\n", cfg.FileProfiles, report.Updates["fileprofiles"]); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(out, "env_profiles=%v source=%s\n", cfg.EnvProfiles, report.Updates["envprofiles"]); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(out, "flag_profiles=%v source=%s\n", cfg.FlagProfiles, report.Updates["flagprofiles"]); err != nil {
+				return err
+			}
 			return nil
 		},
 	}
