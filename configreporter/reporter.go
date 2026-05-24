@@ -50,10 +50,10 @@ func (r Reporter[C]) TOML() ([]byte, error) {
 
 // ProvenanceHeaders returns display headers for provenance rows.
 func (r Reporter[C]) ProvenanceHeaders() []string {
-	return []string{"Path", "Source"}
+	return []string{"Path", "Value", "Source"}
 }
 
-// ProvenanceRows returns sorted provenance rows as path/source pairs.
+// ProvenanceRows returns sorted provenance rows as path/value/source triples.
 func (r Reporter[C]) ProvenanceRows() [][]string {
 	paths := make([]string, 0, len(r.updates))
 	for path := range r.updates {
@@ -63,7 +63,7 @@ func (r Reporter[C]) ProvenanceRows() [][]string {
 
 	rows := make([][]string, 0, len(paths))
 	for _, path := range paths {
-		rows = append(rows, []string{path, r.updates[path]})
+		rows = append(rows, []string{path, formatProvenancePathValue(r.config, path), r.updates[path]})
 	}
 	return rows
 }

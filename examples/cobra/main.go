@@ -50,9 +50,15 @@ func newRootCommand(out io.Writer) (*cobra.Command, error) {
 				return err
 			}
 
-			fmt.Fprintf(out, "name=%s source=%s\n", cfg.Name, report.Updates["name"])
-			fmt.Fprintf(out, "debug=%t source=%s\n", cfg.Debug, report.Updates["debug"])
-			fmt.Fprintf(out, "port=%d source=%s\n", cfg.Port, report.Updates["port"])
+			if _, err := fmt.Fprintf(out, "name=%s source=%s\n", cfg.Name, report.Updates["name"]); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(out, "debug=%t source=%s\n", cfg.Debug, report.Updates["debug"]); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(out, "port=%d source=%s\n", cfg.Port, report.Updates["port"]); err != nil {
+				return err
+			}
 			return nil
 		},
 	}

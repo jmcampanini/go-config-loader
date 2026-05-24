@@ -133,8 +133,8 @@ func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) err
         return err
     }
 
-    headers := reporter.ProvenanceHeaders() // []string{"Path", "Source"}
-    rows := reporter.ProvenanceRows()       // sorted [][]string path/source pairs
+    headers := reporter.ProvenanceHeaders() // []string{"Path", "Value", "Source"}
+    rows := reporter.ProvenanceRows()       // sorted [][]string path/value/source triples
 
     // headers and rows can be passed to a table renderer such as Lip Gloss.
     _, _ = headers, rows
@@ -142,7 +142,9 @@ func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) err
 }
 ```
 
-`reporter.TOML()` returns the effective config as `[]byte`. TOML output uses normal TOML tags and omits fields tagged `toml:"-"`.
+`reporter.TOML()` returns the effective config as `[]byte`. TOML output uses normal TOML tags and omits fields tagged `toml:"-"`. Provenance row values are resolved from the effective config using canonical provenance paths; unresolved paths are shown as `<unavailable>`.
+
+See `examples/provenance` for a complete Lip Gloss provenance-table example.
 
 ## Loading from a custom file location
 
@@ -202,4 +204,13 @@ flagLoader, _ := pflagloader.NewLoader[Config](flags)
 cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 ```
 
-See the `examples` package for testable examples, `examples/cobra` for isolated Cobra CLI integration, and `examples/cobra-slices` for Cobra slice integration.
+## Examples
+
+Runnable examples are standalone modules under `examples/<name>`; run them with `cd examples/<name> && go run .`.
+
+Current examples:
+
+- `examples/basic`: defaults, TOML, environment variables, and provenance.
+- `examples/cobra`: common Cobra CLI loading pattern with `--config`, env, and flags.
+- `examples/slices`: slice loading from files, env, and pflags.
+- `examples/provenance`: formatted effective-config and provenance reporting.
