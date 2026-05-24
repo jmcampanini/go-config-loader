@@ -7,3 +7,19 @@ Run it with:
 ```sh
 go run .
 ```
+
+It prints a compact provenance table like:
+
+```text
+config file source shown as: config.toml
+
+╭────────────────────┬────────────────────────────────┬─────────────╮
+│ Path               │ Value                          │ Source      │
+├────────────────────┼────────────────────────────────┼─────────────┤
+│ debug              │ true                           │ <env>       │
+│ labels["prod.env"] │ "green"                        │ config.toml │
+│ name               │ "from-flag"                    │ <pflag>     │
+│ profiles           │ ["flag-a", "flag-b", "canary"] │ <pflag>     │
+│ timeout            │ "5s"                           │ <default>   │
+╰────────────────────┴────────────────────────────────┴─────────────╯
+```
