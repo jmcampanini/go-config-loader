@@ -1,7 +1,7 @@
 BUILD_DIR := .build
 EXAMPLE_MODULES := examples/basic examples/cobra examples/provenance examples/slices
 
-.PHONY: build check test test-example-modules lint fmt clean
+.PHONY: build check test test-example-modules run-example-modules lint fmt clean
 
 build:
 	go build ./...
@@ -11,7 +11,7 @@ build:
 		(cd $$module && go build -o ../../$(BUILD_DIR)/$$name-example .); \
 	done
 
-check: test lint
+check: test run-example-modules lint
 
 test:
 	go test ./...
@@ -20,6 +20,11 @@ test:
 test-example-modules:
 	for module in $(EXAMPLE_MODULES); do \
 		(cd $$module && go test ./...); \
+	done
+
+run-example-modules:
+	for module in $(EXAMPLE_MODULES); do \
+		(cd $$module && go run .); \
 	done
 
 lint:
