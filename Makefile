@@ -1,17 +1,15 @@
 BUILD_DIR := .build
-COBRA_EXAMPLE_BIN := $(BUILD_DIR)/cobra-example
-COBRA_SLICES_EXAMPLE_BIN := $(BUILD_DIR)/cobra-slices-example
-PROVENANCE_EXAMPLE_BIN := $(BUILD_DIR)/provenance-example
-EXAMPLE_MODULES := examples/cobra examples/cobra-slices examples/provenance
+EXAMPLE_MODULES := examples/basic examples/cobra examples/provenance examples/slices
 
 .PHONY: build check test test-example-modules lint fmt clean
 
 build:
 	go build ./...
 	mkdir -p $(BUILD_DIR)
-	cd examples/cobra && go build -o ../../$(COBRA_EXAMPLE_BIN) .
-	cd examples/cobra-slices && go build -o ../../$(COBRA_SLICES_EXAMPLE_BIN) .
-	cd examples/provenance && go build -o ../../$(PROVENANCE_EXAMPLE_BIN) .
+	for module in $(EXAMPLE_MODULES); do \
+		name=$$(basename $$module); \
+		(cd $$module && go build -o ../../$(BUILD_DIR)/$$name-example .); \
+	done
 
 check: test lint
 
@@ -41,7 +39,7 @@ fmt:
 	done
 
 clean:
-	rm -rf $(BUILD_DIR) examples/cobra/cobra examples/cobra-slices/cobra-slices examples/provenance/provenance
+	rm -rf $(BUILD_DIR) examples/basic/basic examples/cobra/cobra examples/provenance/provenance examples/slices/slices
 	go clean -testcache
 	for module in $(EXAMPLE_MODULES); do \
 		(cd $$module && go clean -testcache); \

@@ -225,4 +225,13 @@ flagLoader, _ := pflagloader.NewLoader[Config](flags)
 cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 ```
 
-See the `examples` package for testable examples. Full runnable examples are standalone modules under `examples/<name>`; run them with `cd examples/<name> && go run .`. Current runnable examples are `examples/cobra`, `examples/cobra-slices`, and `examples/provenance`.
+## Examples
+
+Runnable examples are standalone modules under `examples/<name>`; run them with `cd examples/<name> && go run .`.
+
+Current examples:
+
+- `examples/basic`: defaults, TOML, environment variables, and provenance.
+- `examples/cobra`: common Cobra CLI loading pattern with `--config`, env, and flags.
+- `examples/slices`: slice loading from files, env, and pflags.
+- `examples/provenance`: formatted effective-config and provenance reporting.
