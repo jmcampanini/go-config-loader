@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	configloader "github.com/jmcampanini/go-config-loader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/jmcampanini/go-config-loader/pflagloader"
 	"github.com/spf13/pflag"
 )
@@ -821,16 +821,16 @@ func TestSingularHelpTextIncludesNote(t *testing.T) {
 	}
 }
 
-func TestRootPackageDoesNotDependOnPflag(t *testing.T) {
-	cmd := exec.Command("go", "list", "-deps", ".")
+func TestCorePackageDoesNotDependOnPflag(t *testing.T) {
+	cmd := exec.Command("go", "list", "-deps", "./configloader")
 	cmd.Dir = ".."
 	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("go list -deps . error = %v", err)
+		t.Fatalf("go list -deps ./configloader error = %v", err)
 	}
 	for _, dep := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if dep == "github.com/spf13/pflag" {
-			t.Fatalf("root package unexpectedly depends on github.com/spf13/pflag")
+			t.Fatalf("configloader package unexpectedly depends on github.com/spf13/pflag")
 		}
 	}
 }
