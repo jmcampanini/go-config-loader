@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	configloader "github.com/jmcampanini/go-config-loader/configloader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/jmcampanini/go-config-loader/pflagloader"
 	"github.com/spf13/pflag"
 )

@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/BurntSushi/toml"
-	configloader "github.com/jmcampanini/go-config-loader/configloader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 )
 
 // Reporter formats an already-loaded config value and its provenance metadata.

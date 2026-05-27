@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	configloader "github.com/jmcampanini/go-config-loader/configloader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 )
 
 type ServerConfig struct {

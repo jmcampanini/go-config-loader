@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	configloader "github.com/jmcampanini/go-config-loader/configloader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/jmcampanini/go-config-loader/pflagloader"
 	"github.com/spf13/cobra"
 )

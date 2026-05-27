@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	configloader "github.com/jmcampanini/go-config-loader/configloader"
+	"github.com/jmcampanini/go-config-loader/configloader"
 )
 
 type envNestedConfig struct {
