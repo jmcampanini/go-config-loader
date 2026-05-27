@@ -16,7 +16,7 @@ TOML files, then environment, then flags
 
 `Load` returns the final config plus a `LoadReport`. `LoadReport.Updates` maps canonical Go field paths, such as `server.port` or `labels["env"]`, to the source that last set that value. File sources are reported as absolute paths. `LoadReport.LoadedFiles` lists the absolute config file paths that were successfully parsed, deduped in load order. `LoadReport.Warnings` contains non-fatal load diagnostics such as unknown-key warnings. If `Load` returns an error, the config is the zero value and the report is empty; inspect them only after checking that `err == nil`.
 
-The root package supports defaults, TOML files, environment variables, validation, and file-path helpers. CLI flag support lives in `github.com/jmcampanini/go-config-loader/pflagloader` so the root package does not depend on pflag or Cobra. Reporting helpers live in `github.com/jmcampanini/go-config-loader/configreporter`.
+Core loading support lives in `github.com/jmcampanini/go-config-loader/configloader` and includes defaults, TOML files, environment variables, validation, and file-path helpers. CLI flag support lives in `github.com/jmcampanini/go-config-loader/pflagloader`, keeping pflag/Cobra APIs out of the core package. Reporting helpers live in `github.com/jmcampanini/go-config-loader/configreporter`.
 
 ## Adoption guidance
 
