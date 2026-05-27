@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	configloader "github.com/jmcampanini/go-config-loader"
+	configloader "github.com/jmcampanini/go-config-loader/configloader"
 	"github.com/jmcampanini/go-config-loader/internal/configmeta"
 	"github.com/spf13/pflag"
 )

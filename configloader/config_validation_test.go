@@ -6,7 +6,7 @@ import (
 	"time"
 	"unsafe"
 
-	configloader "github.com/jmcampanini/go-config-loader"
+	configloader "github.com/jmcampanini/go-config-loader/configloader"
 )
 
 var _ encoding.TextUnmarshaler = (*customText)(nil)
