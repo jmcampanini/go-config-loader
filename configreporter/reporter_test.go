@@ -24,6 +24,16 @@ type reportConfig struct {
 	Omit    string        `toml:"-"`
 }
 
+type reportRenderRule struct {
+	Path     string `toml:"path"`
+	Strategy string `toml:"strategy"`
+}
+
+type flushLeftConfig struct {
+	Server      reportServer       `toml:"server"`
+	RenderRules []reportRenderRule `toml:"render_rules"`
+}
+
 type provenanceConfig struct {
 	Name     string
 	Debug    bool
@@ -63,13 +73,38 @@ func TestReporterTOML(t *testing.T) {
 	if strings.Contains(text, "secret") || strings.Contains(text, "Omit") {
 		t.Fatalf("TOML() = %q, want toml:- field omitted", text)
 	}
+}
+
+func TestReporterTOMLFlushLeft(t *testing.T) {
+	r := configreporter.New(flushLeftConfig{
+		Server: reportServer{Host: "localhost", Port: 8080},
+		RenderRules: []reportRenderRule{
+			{Path: ".npmrc", Strategy: "append"},
+		},
+	}, configloader.LoadReport{})
+	want := `[server]
+host = "localhost"
+port = 8080
+
+[[render_rules]]
+path = ".npmrc"
+strategy = "append"
+`
+
+	got, err := r.TOML()
+	if err != nil {
+		t.Fatalf("TOML() error = %v", err)
+	}
+	if !bytes.Equal(got, []byte(want)) {
+		t.Fatalf("TOML() = %q, want %q", got, want)
+	}
 
 	var buf bytes.Buffer
 	if err := r.WriteTOML(&buf); err != nil {
 		t.Fatalf("WriteTOML() error = %v", err)
 	}
 	if !bytes.Equal(buf.Bytes(), got) {
-		t.Fatalf("WriteTOML() = %q, TOML() = %q", buf.String(), text)
+		t.Fatalf("WriteTOML() = %q, TOML() = %q", buf.Bytes(), got)
 	}
 }
 
