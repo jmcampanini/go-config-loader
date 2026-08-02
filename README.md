@@ -142,7 +142,7 @@ func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) err
 }
 ```
 
-`reporter.TOML()` returns the effective config as `[]byte`. TOML output uses normal TOML tags and omits fields tagged `toml:"-"`. Provenance row values are resolved from the effective config using canonical provenance paths; unresolved paths are shown as `<unavailable>`.
+`reporter.TOML()` returns the effective config as `[]byte`. TOML output emits nested table and array-table content flush-left, uses normal TOML tags, and omits fields tagged `toml:"-"`. Provenance row values are resolved from the effective config using canonical provenance paths; unresolved paths are shown as `<unavailable>`.
 
 See `examples/provenance` for a complete Lip Gloss provenance-table example.
 

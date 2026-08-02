@@ -36,7 +36,9 @@ func (r Reporter[C]) WriteTOML(w io.Writer) error {
 	if err := configloader.ValidateConfig[C](); err != nil {
 		return err
 	}
-	return toml.NewEncoder(w).Encode(r.config)
+	encoder := toml.NewEncoder(w)
+	encoder.Indent = ""
+	return encoder.Encode(r.config)
 }
 
 // TOML returns the effective config as TOML bytes.
