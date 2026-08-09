@@ -1,6 +1,6 @@
 module github.com/jmcampanini/go-config-loader/examples/slices
 
-go 1.22
+go 1.26.5
 
 require (
 	github.com/jmcampanini/go-config-loader v0.0.0
