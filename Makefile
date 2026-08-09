@@ -37,7 +37,7 @@ lint:
 		(cd $$module && golangci-lint run ./...); \
 	done
 
-vuln:
+vuln: ## Check dependencies and reachable code for known vulnerabilities.
 	go tool govulncheck ./...
 
 fmt:
