@@ -1,5 +1,3 @@
-# Agent Notes
-
 ## Make targets
 
 - `make test`: Run after code or test changes. Verifies the main module and standalone example modules.
@@ -9,4 +7,4 @@
 - `make build`: Run when changing build paths, examples, or CLI integration. Builds all packages and standalone example binaries.
 - `make clean`: Run only to clear generated build/test artifacts.
 
-Prefer targeted `go test ./path` while iterating, then finish with `make check`.
+- Prefer targeted `go test ./path` while iterating, then finish with `make check`.
