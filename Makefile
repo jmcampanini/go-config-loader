@@ -30,23 +30,20 @@ run-example-modules: ## Run each example module.
 
 lint: ## Run static analysis.
 	go tool golangci-lint run
-	@bin="$$(go tool -n golangci-lint)"; \
-	for module in $(EXAMPLE_MODULES); do \
-		(cd $$module && "$$bin" run) || exit 1; \
+	@for module in $(EXAMPLE_MODULES); do \
+		(cd $$module && go tool golangci-lint run) || exit 1; \
 	done
 
 fmt: ## Format Go source files.
 	go tool golangci-lint fmt
-	@bin="$$(go tool -n golangci-lint)"; \
-	for module in $(EXAMPLE_MODULES); do \
-		(cd $$module && "$$bin" fmt) || exit 1; \
+	@for module in $(EXAMPLE_MODULES); do \
+		(cd $$module && go tool golangci-lint fmt) || exit 1; \
 	done
 
 fmt-check: ## Verify formatting without changing files.
 	go tool golangci-lint fmt --diff
-	@bin="$$(go tool -n golangci-lint)"; \
-	for module in $(EXAMPLE_MODULES); do \
-		(cd $$module && "$$bin" fmt --diff) || exit 1; \
+	@for module in $(EXAMPLE_MODULES); do \
+		(cd $$module && go tool golangci-lint fmt --diff) || exit 1; \
 	done
 
 tidy: ## Apply go mod tidy to the root and example modules.
