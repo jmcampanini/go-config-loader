@@ -1,6 +1,6 @@
 module github.com/jmcampanini/go-config-loader/examples/provenance
 
-go 1.27.0
+go 1.27.1
 
 replace github.com/jmcampanini/go-config-loader => ../..
 
