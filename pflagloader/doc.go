@@ -6,4 +6,5 @@
 // splitting.
 package pflagloader
 
+// SourcePFlag identifies report updates supplied by command-line flags.
 const SourcePFlag = "<pflag>"

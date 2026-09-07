@@ -29,7 +29,7 @@ func newRootCommand(out io.Writer) (*cobra.Command, error) {
 		Use:          "cobra-demo",
 		Short:        "Cobra integration example for go-config-loader",
 		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			fileLoader, err := configloader.NewMergeAllFilesLoader[Config](configloader.File(configFile))
 			if err != nil {
 				return err
