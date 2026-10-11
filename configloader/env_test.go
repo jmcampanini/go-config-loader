@@ -3,6 +3,7 @@ package configloader_test
 import (
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -172,29 +173,60 @@ func TestEnvironmentLoaderParsesEverySupportedScalarType(t *testing.T) {
 	}
 }
 
-func TestEnvironmentLoaderParsesStringSlices(t *testing.T) {
+func TestEnvironmentLoaderParsesSlicesKeepingLastOccurrences(t *testing.T) {
 	type config struct {
 		Profiles []string `config:"profiles"`
+		Ports    []int    `config:"ports"`
 	}
 
-	loader, err := configloader.NewEnvironmentLoader[config]("app", map[string]string{
-		"APP_PROFILES": "env-a, env-b,env-a",
-	})
-	if err != nil {
-		t.Fatalf("NewEnvironmentLoader() error = %v", err)
+	tests := []struct {
+		name string
+		env  map[string]string
+		want config
+	}{
+		{
+			name: "repeated string keeps its last position",
+			env:  map[string]string{"APP_PROFILES": "work, laptop,work"},
+			want: config{Profiles: []string{"laptop", "work"}, Ports: []int{9}},
+		},
+		{
+			name: "integer slices follow the same rule",
+			env:  map[string]string{"APP_PORTS": "80, 443,80"},
+			want: config{Profiles: []string{"abc"}, Ports: []int{443, 80}},
+		},
+		{
+			name: "whitespace-only input keeps one blank item",
+			env:  map[string]string{"APP_PROFILES": "   "},
+			want: config{Profiles: []string{""}, Ports: []int{9}},
+		},
+		{
+			name: "empty input clears the list",
+			env:  map[string]string{"APP_PROFILES": ""},
+			want: config{Profiles: []string{}, Ports: []int{9}},
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loader, err := configloader.NewEnvironmentLoader[config]("app", tt.env)
+			if err != nil {
+				t.Fatalf("NewEnvironmentLoader() error = %v", err)
+			}
 
-	got, report, err := loader(config{Profiles: []string{"abc"}})
-	if err != nil {
-		t.Fatalf("loader() error = %v", err)
-	}
+			got, report, err := loader(config{Profiles: []string{"abc"}, Ports: []int{9}})
+			if err != nil {
+				t.Fatalf("loader() error = %v", err)
+			}
 
-	want := config{Profiles: []string{"env-a", "env-b"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("loader() config = %#v, want %#v", got, want)
-	}
-	if report.Updates["profiles"] != configloader.SourceEnv {
-		t.Fatalf("report.Updates[profiles] = %q, want SourceEnv", report.Updates["profiles"])
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("loader() config = %#v, want %#v", got, tt.want)
+			}
+			for name := range tt.env {
+				path := strings.ToLower(strings.TrimPrefix(name, "APP_"))
+				if report.Updates[path] != configloader.SourceEnv {
+					t.Errorf("report.Updates[%s] = %q, want SourceEnv", path, report.Updates[path])
+				}
+			}
+		})
 	}
 }
 

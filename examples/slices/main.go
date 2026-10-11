@@ -13,21 +13,21 @@ import (
 )
 
 type Config struct {
-	DefaultOnlyProfiles []string `toml:"default_only_profiles"`
-	FileProfiles        []string `toml:"file_profiles"`
-	EnvProfiles         []string `toml:"env_profiles" config:"env-profiles" help:"profiles loaded from environment"`
-	FlagProfiles        []string `toml:"flag_profiles" config:"flag-profiles" pflag_singular:"flag-profile" help:"profiles loaded from pflags"`
+	DefaultOnlyItems []string `toml:"default_only_items"`
+	FileItems        []string `toml:"file_items"`
+	EnvItems         []string `toml:"env_items" config:"env-items" help:"items loaded from environment"`
+	FlagItems        []string `toml:"flag_items" config:"flag-items" pflag_singular:"flag-item" help:"items loaded from pflags"`
 }
 
 var defaults = Config{
-	DefaultOnlyProfiles: []string{"default"},
-	FileProfiles:        []string{"default"},
-	EnvProfiles:         []string{"default"},
-	FlagProfiles:        []string{"default"},
+	DefaultOnlyItems: []string{"default"},
+	FileItems:        []string{"default"},
+	EnvItems:         []string{"default"},
+	FlagItems:        []string{"default"},
 }
 
 const fileConfig = `
-file_profiles = ["file-a", "file-b"]
+file_items = ["file-a", "file-b", "file-a"]
 `
 
 func main() {
@@ -39,15 +39,15 @@ func main() {
 	flags.SetOutput(io.Discard)
 	must(pflagloader.Register[Config](flags))
 	must(flags.Parse([]string{
-		"--flag-profiles=flag-a,flag-b",
-		"--flag-profile=flag-b",
-		"--flag-profile=canary",
+		"--flag-item=flag-a",
+		"--flag-items=flag-a,flag-b",
+		"--flag-item=canary",
 	}))
 
 	fileLoader, err := configloader.NewMergeAllFilesLoader[Config](configloader.File(configPath))
 	must(err)
 	envLoader, err := configloader.NewEnvironmentLoader[Config]("slices-demo", map[string]string{
-		"SLICES_DEMO_ENV_PROFILES": "env-a, env-b, env-a",
+		"SLICES_DEMO_ENV_ITEMS": "env-a, env-b, env-a",
 	})
 	must(err)
 	flagLoader, err := pflagloader.NewLoader[Config](flags)
@@ -56,10 +56,10 @@ func main() {
 	cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 	must(err)
 
-	fmt.Printf("default_only_profiles=%v source=%s\n", cfg.DefaultOnlyProfiles, report.Updates["defaultonlyprofiles"])
-	fmt.Printf("file_profiles=%v source=%s\n", cfg.FileProfiles, report.Updates["fileprofiles"])
-	fmt.Printf("env_profiles=%v source=%s\n", cfg.EnvProfiles, report.Updates["envprofiles"])
-	fmt.Printf("flag_profiles=%v source=%s\n", cfg.FlagProfiles, report.Updates["flagprofiles"])
+	fmt.Printf("default_only_items=%v source=%s\n", cfg.DefaultOnlyItems, report.Updates["defaultonlyitems"])
+	fmt.Printf("file_items=%v source=%s\n", cfg.FileItems, report.Updates["fileitems"])
+	fmt.Printf("env_items=%v source=%s\n", cfg.EnvItems, report.Updates["envitems"])
+	fmt.Printf("flag_items=%v source=%s\n", cfg.FlagItems, report.Updates["flagitems"])
 }
 
 func writeTempConfigFile() (string, func(), error) {

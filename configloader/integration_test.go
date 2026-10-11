@@ -203,3 +203,89 @@ func writeIntegrationFile(t *testing.T, dir, name, content string) string {
 	}
 	return path
 }
+
+type integrationProfilesConfig struct {
+	Profiles []string `toml:"profiles" config:"profiles" pflag_singular:"profile" help:"raw profiles"`
+}
+
+func TestEndToEndSliceLayersReplaceAndKeepLastOccurrence(t *testing.T) {
+	tests := []struct {
+		name       string
+		file       string
+		env        map[string]string
+		args       []string
+		want       []string
+		wantSource string
+	}{
+		{
+			name: "file list is loaded verbatim",
+			file: `profiles = ["work", "laptop", "work"]` + "\n",
+			want: []string{"work", "laptop", "work"},
+		},
+		{
+			name:       "environment replaces the file list and keeps last occurrences",
+			file:       `profiles = ["file"]` + "\n",
+			env:        map[string]string{"MY_APP_PROFILES": "work,laptop,work"},
+			want:       []string{"laptop", "work"},
+			wantSource: configloader.SourceEnv,
+		},
+		{
+			name:       "flags replace the environment list",
+			file:       `profiles = ["file"]` + "\n",
+			env:        map[string]string{"MY_APP_PROFILES": "env"},
+			args:       []string{"--profile", "work", "--profiles", "work,laptop"},
+			want:       []string{"laptop", "work"},
+			wantSource: pflagloader.SourcePFlag,
+		},
+		{
+			name:       "an explicit empty flag clears the list",
+			file:       `profiles = ["file"]` + "\n",
+			env:        map[string]string{"MY_APP_PROFILES": "env"},
+			args:       []string{"--profiles="},
+			want:       []string{},
+			wantSource: pflagloader.SourcePFlag,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			file := writeIntegrationFile(t, dir, "config.toml", tt.file)
+			fileLoader, err := configloader.NewMergeAllFilesLoader[integrationProfilesConfig]([]string{file})
+			if err != nil {
+				t.Fatalf("NewMergeAllFilesLoader() error = %v", err)
+			}
+			envLoader, err := configloader.NewEnvironmentLoader[integrationProfilesConfig]("my-app", tt.env)
+			if err != nil {
+				t.Fatalf("NewEnvironmentLoader() error = %v", err)
+			}
+			flags := pflag.NewFlagSet(t.Name(), pflag.ContinueOnError)
+			flags.SetOutput(io.Discard)
+			if err := pflagloader.Register[integrationProfilesConfig](flags); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			if err := flags.Parse(tt.args); err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.args, err)
+			}
+			flagLoader, err := pflagloader.NewLoader[integrationProfilesConfig](flags)
+			if err != nil {
+				t.Fatalf("NewLoader() error = %v", err)
+			}
+
+			got, report, err := configloader.Load(integrationProfilesConfig{Profiles: []string{}}, fileLoader, envLoader, flagLoader)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if !reflect.DeepEqual(got.Profiles, tt.want) {
+				t.Errorf("Load() Profiles = %#v, want %#v", got.Profiles, tt.want)
+			}
+			wantSource := tt.wantSource
+			if wantSource == "" {
+				wantSource = file // file sources are reported by absolute path
+			}
+			if report.Updates["profiles"] != wantSource {
+				t.Errorf("report.Updates[profiles] = %q, want %q", report.Updates["profiles"], wantSource)
+			}
+		})
+	}
+}

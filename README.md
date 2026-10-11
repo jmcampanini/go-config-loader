@@ -58,8 +58,10 @@ Source-specific behavior:
 
 - TOML can load exported fields using `toml` tags or Go field names.
 - Environment variables and pflags only load scalar leaf fields and scalar-slice leaf fields with `config` tags.
-- Slice env/canonical pflag values are comma-separated, surrounding whitespace is trimmed from each item, duplicate items are removed while preserving first-seen order, repeated pflags append before deduping, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
-- `pflag_singular` is pflag-only; it does not change TOML keys or environment variable names, and names are never inferred from plurals. Singular pflags append one trimmed scalar value per occurrence, reject empty values, and do not split commas. If both canonical and singular slice pflags are present, canonical values are applied first, then singular values in pflag parse order; no global ordering is guaranteed between the two flag names.
+- Slice env/canonical pflag values are comma-separated, surrounding whitespace is trimmed from each item, repeated pflags append, an empty value means an empty slice, and commas inside values are not escaped. Scalar fields are not split.
+- After splitting, the loader keeps the last occurrence of each repeated item in its position, so `work,laptop,work` loads as `["laptop", "work"]`. Blank items inside a non-empty list are kept, so `work,,laptop` loads as `["work", "", "laptop"]` and a whitespace-only value loads as `[""]`; validate them in application code. TOML lists and defaults are loaded verbatim.
+- A `pflag.SliceValue` registered by the application, such as `StringSliceVar`, is read through `GetSlice()` and follows the same last-occurrence rule, but pflag drops an empty value before the loader sees it, so `--profiles work --profiles ""` yields `["work"]` on that path.
+- `pflag_singular` is pflag-only; it does not change TOML keys or environment variable names, and names are never inferred from plurals. Singular pflags append one trimmed scalar value per occurrence, reject empty values, and do not split commas. If both canonical and singular slice pflags are present, canonical values are applied first, then singular values in pflag parse order, and the last-occurrence rule is applied to the combined list; no global ordering is guaranteed between the two flag names.
 - Provenance paths always use canonical Go field names, not tags.
 
 For example, `Server.Port` is reported as `server.port` even if its TOML key is `listen_port` or its flag is `--port`.
