@@ -13,13 +13,15 @@ It prints a compact provenance table like:
 ```text
 config file source shown as: config.toml
 
-╭────────────────────┬────────────────────────────────┬─────────────╮
-│ Path               │ Value                          │ Source      │
-├────────────────────┼────────────────────────────────┼─────────────┤
-│ debug              │ true                           │ <env>       │
-│ labels["prod.env"] │ "green"                        │ config.toml │
-│ name               │ "from-flag"                    │ <pflag>     │
-│ profiles           │ ["flag-a", "flag-b", "canary"] │ <pflag>     │
-│ timeout            │ "5s"                           │ <default>   │
-╰────────────────────┴────────────────────────────────┴─────────────╯
+╭────────────────────┬──────────────────────┬─────────────╮
+│ Path               │ Value                │ Source      │
+├────────────────────┼──────────────────────┼─────────────┤
+│ debug              │ true                 │ <env>       │
+│ labels["prod.env"] │ "green"              │ config.toml │
+│ name               │ "from-flag"          │ <pflag>     │
+│ profiles           │ ["flag-b", "flag-a"] │ <pflag>     │
+│ timeout            │ "5s"                 │ <default>   │
+╰────────────────────┴──────────────────────┴─────────────╯
 ```
+
+The `profiles` row shows raw profiles: the loaded list after precedence, with `--profiles` values first, then `--profile` values, reduced to the last occurrence of each name. Deriving effective profiles, such as appending `env_profiles` values and validating names, is application work that happens after loading and is not part of this report.

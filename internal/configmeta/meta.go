@@ -248,22 +248,39 @@ func ParseText(text string, t reflect.Type) (reflect.Value, error) {
 		if text == "" {
 			return parsed, nil
 		}
-		seen := make(map[any]struct{})
 		for _, part := range strings.Split(text, ",") {
 			value, err := ParseScalar(strings.TrimSpace(part), t.Elem())
 			if err != nil {
 				return reflect.Value{}, fmt.Errorf("parse %q as %s: %w", text, t, err)
 			}
-			key := value.Interface()
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
 			parsed = reflect.Append(parsed, value)
 		}
-		return parsed, nil
+		return KeepLastOccurrences(parsed), nil
 	}
 	return reflect.Value{}, fmt.Errorf("type %s is not a supported env/pflag type", t)
+}
+
+// KeepLastOccurrences removes repeated items from a slice value, keeping the
+// last occurrence of each item in its position. Items are compared by value.
+func KeepLastOccurrences(value reflect.Value) reflect.Value {
+	if value.Len() < 2 {
+		return value
+	}
+
+	lastIndex := make(map[any]int, value.Len())
+	for i := 0; i < value.Len(); i++ {
+		lastIndex[value.Index(i).Interface()] = i
+	}
+
+	reduced := reflect.MakeSlice(value.Type(), 0, len(lastIndex))
+	for i := 0; i < value.Len(); i++ {
+		item := value.Index(i)
+		if lastIndex[item.Interface()] != i {
+			continue
+		}
+		reduced = reflect.Append(reduced, item)
+	}
+	return reduced
 }
 
 // ParseScalar parses text into a reflect.Value of the supported scalar type t.

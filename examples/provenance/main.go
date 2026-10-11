@@ -20,7 +20,7 @@ type Config struct {
 	Name     string            `toml:"name" config:"name" help:"display name"`
 	Debug    bool              `toml:"debug" config:"debug" help:"enable debug output"`
 	Timeout  time.Duration     `toml:"timeout" config:"timeout" help:"request timeout"`
-	Profiles []string          `toml:"profiles" config:"profiles" pflag_singular:"profile" help:"active profiles"`
+	Profiles []string          `toml:"profiles" config:"profiles" pflag_singular:"profile" help:"raw profiles"`
 	Labels   map[string]string `toml:"labels"`
 }
 
@@ -46,7 +46,7 @@ func main() {
 	must(flags.Parse([]string{
 		"--name=from-flag",
 		"--profiles=flag-a,flag-b",
-		"--profile=canary",
+		"--profile=flag-a",
 	}))
 
 	fileLoader, err := configloader.NewMergeAllFilesLoader[Config](configloader.File(configPath))

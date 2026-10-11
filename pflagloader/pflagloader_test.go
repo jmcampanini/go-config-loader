@@ -188,7 +188,7 @@ func TestChangedFlagsUpdateConfigAndCanonicalProvenance(t *testing.T) {
 	}
 }
 
-func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) {
+func TestStringSliceFlagsAppendValuesKeepLastOccurrenceAndUpdateCanonicalProvenance(t *testing.T) {
 	type config struct {
 		Profiles []string `config:"profiles" help:"profile names"`
 	}
@@ -210,7 +210,7 @@ func TestStringSliceFlagsAppendValuesAndUpdateCanonicalProvenance(t *testing.T) 
 		t.Fatalf("loader() error = %v", err)
 	}
 
-	want := config{Profiles: []string{"flag-a", "flag-b", "flag-c"}}
+	want := config{Profiles: []string{"flag-b", "flag-c", "flag-a"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
 	}
@@ -240,7 +240,7 @@ func TestExistingStringSliceVarLoadsParsedSliceValue(t *testing.T) {
 		t.Fatalf("loader() error = %v", err)
 	}
 
-	want := config{Profiles: []string{"work", "vpn", "personal"}}
+	want := config{Profiles: []string{"vpn", "personal", "work"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
 	}
@@ -554,7 +554,7 @@ func TestSingularDurationAndBoolFlagsParseOneScalar(t *testing.T) {
 	}
 }
 
-func TestCanonicalAndSingularSliceFlagsCombineInWavesAndDedupe(t *testing.T) {
+func TestCanonicalAndSingularSliceFlagsCombineInWavesThenKeepLastOccurrence(t *testing.T) {
 	flags := newFlagSet(t)
 	if err := pflagloader.Register[pflagSingularProfilesConfig](flags); err != nil {
 		t.Fatalf("Register() error = %v", err)
@@ -572,9 +572,125 @@ func TestCanonicalAndSingularSliceFlagsCombineInWavesAndDedupe(t *testing.T) {
 		t.Fatalf("loader() error = %v", err)
 	}
 
-	want := pflagSingularProfilesConfig{Profiles: []string{"a", "b", "d", "c"}}
+	want := pflagSingularProfilesConfig{Profiles: []string{"d", "a", "c", "b"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("loader() config = %#v, want %#v", got, want)
+	}
+}
+
+func TestSliceFlagsKeepLastOccurrenceAcrossInputForms(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles" pflag_singular:"profile" help:"profile names"`
+		Ports    []int    `config:"ports" help:"port numbers"`
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		want config
+	}{
+		{
+			name: "singular before plural still applies plural first",
+			args: []string{"--profile", "work", "--profiles", "work,laptop"},
+			want: config{Profiles: []string{"laptop", "work"}, Ports: []int{1}},
+		},
+		{
+			name: "repeated singular keeps last position",
+			args: []string{"--profile=work", "--profile=laptop", "--profile=work"},
+			want: config{Profiles: []string{"laptop", "work"}, Ports: []int{1}},
+		},
+		{
+			name: "repeated plural keeps last position",
+			args: []string{"--profiles=work,laptop", "--profiles=work"},
+			want: config{Profiles: []string{"laptop", "work"}, Ports: []int{1}},
+		},
+		{
+			name: "repeated empty plural keeps a blank item",
+			args: []string{"--profiles=work", "--profiles="},
+			want: config{Profiles: []string{"work", ""}, Ports: []int{1}},
+		},
+		{
+			name: "doubled comma keeps a blank item",
+			args: []string{"--profiles=work,,laptop"},
+			want: config{Profiles: []string{"work", "", "laptop"}, Ports: []int{1}},
+		},
+		{
+			name: "integer slices follow the same rule",
+			args: []string{"--ports=80,443", "--ports=80"},
+			want: config{Profiles: []string{"default"}, Ports: []int{443, 80}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := newFlagSet(t)
+			if err := pflagloader.Register[config](flags); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			if err := flags.Parse(tt.args); err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.args, err)
+			}
+			loader, err := pflagloader.NewLoader[config](flags)
+			if err != nil {
+				t.Fatalf("NewLoader() error = %v", err)
+			}
+
+			got, _, err := loader(config{Profiles: []string{"default"}, Ports: []int{1}})
+			if err != nil {
+				t.Fatalf("loader() error = %v", err)
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("loader(%q) config = %#v, want %#v", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExistingStringSliceVarKeepsLastOccurrenceButCannotSeeRepeatedEmptyValues(t *testing.T) {
+	type config struct {
+		Profiles []string `config:"profiles" help:"profile names"`
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "repeated name keeps last position",
+			args: []string{"--profiles=work,laptop", "--profiles=work"},
+			want: []string{"laptop", "work"},
+		},
+		{
+			// pflag's StringSlice parser drops an empty value before the loader
+			// sees it, so no blank item survives on this path.
+			name: "repeated empty value is not observable",
+			args: []string{"--profiles=work", "--profiles="},
+			want: []string{"work"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := newFlagSet(t)
+			var profiles []string
+			flags.StringSliceVar(&profiles, "profiles", nil, "profile names")
+			if err := flags.Parse(tt.args); err != nil {
+				t.Fatalf("Parse(%q) error = %v", tt.args, err)
+			}
+			loader, err := pflagloader.NewLoader[config](flags)
+			if err != nil {
+				t.Fatalf("NewLoader() error = %v", err)
+			}
+
+			got, _, err := loader(config{Profiles: []string{"default"}})
+			if err != nil {
+				t.Fatalf("loader() error = %v", err)
+			}
+
+			if !reflect.DeepEqual(got.Profiles, tt.want) {
+				t.Errorf("loader(%q) Profiles = %#v, want %#v", tt.args, got.Profiles, tt.want)
+			}
+		})
 	}
 }
 

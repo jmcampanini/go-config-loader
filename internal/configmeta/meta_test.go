@@ -87,12 +87,12 @@ func TestIsKebabCase(t *testing.T) {
 	}
 }
 
-func TestParseTextTrimsAndDedupesSliceValues(t *testing.T) {
+func TestParseTextTrimsAndKeepsLastOccurrences(t *testing.T) {
 	got, err := ParseText("a, b,c,a, b ", reflect.TypeOf([]string{}))
 	if err != nil {
 		t.Fatalf("ParseText() error = %v", err)
 	}
-	want := []string{"a", "b", "c"}
+	want := []string{"c", "a", "b"}
 	if !reflect.DeepEqual(got.Interface(), want) {
 		t.Fatalf("ParseText() = %#v, want %#v", got.Interface(), want)
 	}
@@ -101,8 +101,32 @@ func TestParseTextTrimsAndDedupesSliceValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseText() ints error = %v", err)
 	}
-	wantInts := []int{1, 2, 3}
+	wantInts := []int{2, 1, 3}
 	if !reflect.DeepEqual(ints.Interface(), wantInts) {
 		t.Fatalf("ParseText() ints = %#v, want %#v", ints.Interface(), wantInts)
+	}
+}
+
+func TestParseTextKeepsBlankSliceItems(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{name: "empty input is an empty slice", text: "", want: []string{}},
+		{name: "whitespace-only input is one blank item", text: "  ", want: []string{""}},
+		{name: "doubled comma keeps a blank item", text: "work,,laptop", want: []string{"work", "", "laptop"}},
+		{name: "repeated blank items keep the last", text: "work,,laptop,", want: []string{"work", "laptop", ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseText(tt.text, reflect.TypeOf([]string{}))
+			if err != nil {
+				t.Fatalf("ParseText(%q) error = %v", tt.text, err)
+			}
+			if !reflect.DeepEqual(got.Interface(), tt.want) {
+				t.Errorf("ParseText(%q) = %#v, want %#v", tt.text, got.Interface(), tt.want)
+			}
+		})
 	}
 }

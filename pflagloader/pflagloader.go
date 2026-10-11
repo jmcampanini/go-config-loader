@@ -271,7 +271,7 @@ func parseFlagValue(field pflagField, canonicalFlag, singularFlag *pflag.Flag) (
 		}
 	}
 
-	return dedupeSlice(combined), nil
+	return configmeta.KeepLastOccurrences(combined), nil
 }
 
 func parseCanonicalFlagValue(field pflagField, flag *pflag.Flag) (reflect.Value, error) {
@@ -301,26 +301,7 @@ func parseCanonicalSliceItems(texts []string, typ reflect.Type) (reflect.Value, 
 		}
 		parsed = reflect.Append(parsed, value)
 	}
-	return dedupeSlice(parsed), nil
-}
-
-func dedupeSlice(value reflect.Value) reflect.Value {
-	if value.Len() < 2 {
-		return value
-	}
-
-	seen := make(map[any]struct{}, value.Len())
-	deduped := reflect.MakeSlice(value.Type(), 0, value.Len())
-	for i := 0; i < value.Len(); i++ {
-		item := value.Index(i)
-		key := item.Interface()
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		deduped = reflect.Append(deduped, item)
-	}
-	return deduped
+	return configmeta.KeepLastOccurrences(parsed), nil
 }
 
 func singularTexts(flag *pflag.Flag) ([]string, error) {
