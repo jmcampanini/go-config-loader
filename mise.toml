@@ -1,0 +1,124 @@
+min_version = "2026.1.0"
+
+[settings]
+lockfile = true
+lockfile_platforms = ["linux-x64", "macos-arm64"]
+
+[tools]
+go = "1.27.2"
+golangci-lint = "2.14.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.8.0"
+
+[env]
+# Go's default GOTOOLCHAIN=auto downloads whatever toolchain go.mod asks for.
+# local pins execution to the Go that mise installed.
+GOTOOLCHAIN = "local"
+
+[vars]
+# Standalone example modules under examples/. Each has its own go.mod and a
+# replace directive pointing at the root module, so every task that walks the
+# tree has to visit them explicitly.
+example_modules = "examples/basic examples/cobra examples/provenance examples/slices"
+
+[tasks.build]
+description = "Build all packages and the example binaries into .build/."
+run = '''
+go build ./...
+mkdir -p .build
+for module in {{vars.example_modules}}; do
+  name="$(basename "$module")"
+  (cd "$module" && go build -o "../../.build/${name}-example" .) || exit 1
+done
+'''
+
+[tasks.test]
+description = "Run all tests uncached with the race detector, including the example modules."
+run = '''
+go test -count=1 -race ./...
+for module in {{vars.example_modules}}; do
+  (cd "$module" && go test -count=1 -race ./...) || exit 1
+done
+'''
+
+[tasks.run-example-modules]
+description = "Run each example module."
+run = '''
+for module in {{vars.example_modules}}; do
+  (cd "$module" && go run .) || exit 1
+done
+'''
+
+[tasks.fmt]
+description = "Format Go source files in the root and example modules."
+run = '''
+golangci-lint fmt
+for module in {{vars.example_modules}}; do
+  (cd "$module" && golangci-lint fmt) || exit 1
+done
+'''
+
+[tasks.fmt-check]
+description = "Verify formatting without changing files."
+run = '''
+golangci-lint fmt --diff
+for module in {{vars.example_modules}}; do
+  (cd "$module" && golangci-lint fmt --diff) || exit 1
+done
+'''
+
+[tasks.tidy]
+description = "Apply go mod tidy to the root and example modules."
+run = '''
+go mod tidy
+for module in {{vars.example_modules}}; do
+  (cd "$module" && go mod tidy) || exit 1
+done
+'''
+
+[tasks.tidy-check]
+description = "Verify every go.mod and go.sum is tidy without changing them."
+run = '''
+go mod tidy -diff
+for module in {{vars.example_modules}}; do
+  (cd "$module" && go mod tidy -diff) || exit 1
+done
+'''
+
+[tasks.lint]
+description = "Run static analysis on the root and example modules."
+run = '''
+golangci-lint run ./...
+for module in {{vars.example_modules}}; do
+  (cd "$module" && golangci-lint run ./...) || exit 1
+done
+'''
+
+[tasks.lint-fix]
+description = "Run static analysis with --fix on the root and example modules."
+run = '''
+golangci-lint run --fix ./...
+for module in {{vars.example_modules}}; do
+  (cd "$module" && golangci-lint run --fix ./...) || exit 1
+done
+'''
+
+[tasks.vuln]
+description = "Check dependencies and reachable code for known vulnerabilities."
+run = "govulncheck ./..."
+
+# check is read-only: it must leave the tracked tree unchanged and create
+# nothing outside ignored paths. CI diffs `git status` before and after it.
+# Add report-only tasks here; fixers (fmt, lint-fix, tidy) stay out.
+[tasks.check]
+description = "Run the complete local verification contract."
+depends = ["fmt-check", "tidy-check", "lint", "test", "run-example-modules", "build", "vuln"]
+
+[tasks.clean]
+description = "Remove build artifacts and the Go test cache."
+run = '''
+rm -rf .build examples/basic/basic examples/cobra/cobra examples/provenance/provenance examples/slices/slices
+go clean -testcache
+for module in {{vars.example_modules}}; do
+  (cd "$module" && go clean -testcache) || exit 1
+done
+'''
