@@ -208,7 +208,7 @@ cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoade
 
 ## Examples
 
-Runnable examples are standalone modules under `examples/<name>`; run them with `cd examples/<name> && go run .`. In a checkout with [mise](https://mise.jdx.dev) installed, `mise install` fetches the pinned Go toolchain and `mise run run-example-modules` runs every example.
+Runnable examples are standalone modules under `examples/<name>`. In a checkout with [mise](https://mise.jdx.dev) installed, `mise install` fetches the pinned Go toolchain. From the repository root, `mise run run-example-modules` runs every example.
 
 Current examples:
 
