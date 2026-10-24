@@ -12,4 +12,4 @@
   - `mise run vuln` runs govulncheck against the main module.
   - `mise run clean` removes generated build and test artifacts.
 - `mise.toml` pins Go, golangci-lint, and govulncheck; `mise.lock` records their checksums. `GOTOOLCHAIN=local` makes Go run the toolchain mise installed, so keep the `go` directive in every `go.mod` equal to the `go` pin. Bump a tool with `mise upgrade --bump <tool>`, run `mise lock` and `mise run check`, and commit `mise.toml` and `mise.lock` together.
-- Prefer targeted `mise exec -- go test ./path` while iterating, then finish with `mise run check`.
+- Prefer targeted `mise run test-pkg ./path` while iterating, then finish with `mise run check`.
