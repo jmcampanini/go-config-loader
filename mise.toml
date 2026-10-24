@@ -40,6 +40,11 @@ for module in {{vars.example_modules}}; do
 done
 '''
 
+[tasks.test-pkg]
+description = "Run tests for a package path or pattern uncached with the race detector."
+usage = 'arg "<path>" help="Package path or pattern relative to the repository root"'
+run = 'go test -count=1 -race "${usage_path?}"'
+
 [tasks.run-example-modules]
 description = "Run each example module."
 run = '''
