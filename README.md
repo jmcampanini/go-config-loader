@@ -18,10 +18,12 @@ TOML files, then environment, then flags
 
 Core loading support lives in `github.com/jmcampanini/go-config-loader/configloader` and includes defaults, TOML files, environment variables, validation, and file-path helpers. CLI flag support lives in `github.com/jmcampanini/go-config-loader/pflagloader`, keeping pflag/Cobra APIs out of the core package. Reporting helpers live in `github.com/jmcampanini/go-config-loader/configreporter`.
 
+
 ## Adoption guidance
 
 - Treat this library as the loading boundary: use it to layer defaults, files, environment variables, and flags into a config struct, then perform application validation, normalization, and derived/effective-field computation in your own application code.
 - Custom file discovery does not require custom loaders; compose the candidate paths you want, including paths from custom directories, and pass them to the existing file loaders.
+
 
 ## Configuration structs
 
@@ -65,6 +67,7 @@ Source-specific behavior:
 - Provenance paths always use canonical Go field names, not tags.
 
 For example, `Server.Port` is reported as `server.port` even if its TOML key is `listen_port` or its flag is `--port`.
+
 
 ## Canonical layered loading
 
@@ -123,6 +126,7 @@ func loadConfig(flags *pflag.FlagSet) (Config, configloader.LoadReport) {
 }
 ```
 
+
 ## Reporting effective configuration and provenance
 
 `configreporter` formats already-loaded config values and provenance metadata. It does not load or mutate configuration.
@@ -147,6 +151,7 @@ func reportConfig(cfg Config, report configloader.LoadReport, out io.Writer) err
 `reporter.TOML()` returns the effective config as `[]byte`. TOML output emits nested table and array-table content flush-left, uses normal TOML tags, and omits fields tagged `toml:"-"`. Provenance row values are resolved from the effective config using canonical provenance paths; unresolved paths are shown as `<unavailable>`.
 
 See `examples/provenance` for a complete Lip Gloss provenance-table example.
+
 
 ## Loading from a custom file location
 
@@ -205,6 +210,7 @@ envLoader, _ := configloader.NewEnvironmentLoader[Config]("my-app", configloader
 flagLoader, _ := pflagloader.NewLoader[Config](flags)
 cfg, report, err := configloader.Load(defaults, fileLoader, envLoader, flagLoader)
 ```
+
 
 ## Examples
 
