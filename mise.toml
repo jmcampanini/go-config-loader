@@ -12,14 +12,11 @@ node = "24.21.0"
 "npm:markdownlint-cli2" = "0.24.0"
 
 [env]
-# Go's default GOTOOLCHAIN=auto downloads whatever toolchain go.mod asks for.
-# local pins execution to the Go that mise installed.
+# Go's default GOTOOLCHAIN=auto downloads whatever toolchain go.mod asks for. local pins execution to the Go that mise installed.
 GOTOOLCHAIN = "local"
 
 [vars]
-# Standalone example modules under examples/. Each has its own go.mod and a
-# replace directive pointing at the root module, so every task that walks the
-# tree has to visit them explicitly.
+# Standalone example modules under examples/. Each has its own go.mod and a replace directive pointing at the root module, so every task that walks the tree has to visit them explicitly.
 example_modules = "examples/basic examples/cobra examples/provenance examples/slices"
 
 [tasks.build]
@@ -117,10 +114,7 @@ run = "git ls-files -z -- '*.md' '*.markdown' | xargs -0 markdownlint-cli2"
 description = "Check dependencies and reachable code for known vulnerabilities."
 run = "govulncheck ./..."
 
-# check is read-only: it must leave the tracked tree unchanged and create
-# nothing outside ignored paths. CI asserts a clean checkout before and after
-# it, even when check fails.
-# Add report-only tasks here; fixers (fmt, lint-fix, tidy) stay out.
+# check is read-only: it must leave the tracked tree unchanged and create nothing outside ignored paths. CI asserts a clean checkout before and after it, even when check fails. Add report-only tasks here; fixers (fmt, lint-fix, tidy) stay out.
 [tasks.check]
 description = "Run the complete local verification contract."
 depends = ["fmt-check", "tidy-check", "lint", "lint-markdown", "test", "run-example-modules", "build", "vuln"]
