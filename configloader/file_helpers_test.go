@@ -95,6 +95,11 @@ func TestFileHelperXDGConfigFile(t *testing.T) {
 	assertStrings(t, "XDGConfigFile default", helper.XDGConfigFile(), []string{
 		filepath.Join(home, ".config", "my-cli", "config.toml"),
 	})
+
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join("relative", "xdg-config"))
+	assertStrings(t, "XDGConfigFile relative env", helper.XDGConfigFile(), []string{
+		filepath.Join(home, ".config", "my-cli", "config.toml"),
+	})
 }
 
 func TestFileHelperWalkCwdToHomeInsideHome(t *testing.T) {
