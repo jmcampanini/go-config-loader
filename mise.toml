@@ -111,8 +111,13 @@ description = "Lint tracked Markdown using the shared Markdown rules."
 run = "git ls-files -z -- '*.md' '*.markdown' | xargs -0 markdownlint-cli2"
 
 [tasks.vuln]
-description = "Check dependencies and reachable code for known vulnerabilities."
-run = "govulncheck ./..."
+description = "Check dependencies and reachable code in the root and example modules for known vulnerabilities."
+run = '''
+govulncheck ./...
+for module in {{vars.example_modules}}; do
+  (cd "$module" && govulncheck ./...) || exit 1
+done
+'''
 
 # check is read-only: it must leave the tracked tree unchanged and create nothing outside ignored paths. CI asserts a clean checkout before and after it, even when check fails. Add report-only tasks here; fixers (fmt, lint-fix, tidy) stay out.
 [tasks.check]
