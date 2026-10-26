@@ -52,7 +52,7 @@ func (f FileHelper) CwdHidden() []string {
 func (f FileHelper) CwdBoth() []string { return Files(f.Cwd(), f.CwdHidden()) }
 
 // XDGConfigFile returns the config file path under $XDG_CONFIG_HOME/<app>.
-// If XDG_CONFIG_HOME is unset, empty, or relative, it uses ~/.config/<app>.
+// If XDG_CONFIG_HOME is unset, empty, or not absolute, it uses ~/.config/<app>.
 // It returns nil if the fallback home directory cannot be determined.
 func (f FileHelper) XDGConfigFile() []string {
 	base := os.Getenv("XDG_CONFIG_HOME")
@@ -62,6 +62,12 @@ func (f FileHelper) XDGConfigFile() []string {
 			return nil
 		}
 		base = filepath.Join(home, ".config")
+	} else {
+		abs, err := filepath.Abs(base)
+		if err != nil {
+			return nil
+		}
+		base = abs
 	}
 	return []string{filepath.Join(base, f.AppName, f.ConfigFileName)}
 }
