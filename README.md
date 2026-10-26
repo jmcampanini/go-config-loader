@@ -107,6 +107,8 @@ func loadConfig(flags *pflag.FlagSet) (Config, configloader.LoadReport) {
     // host = "0.0.0.0"
     // port = 9090
     files := configloader.Files(
+        // $XDG_CONFIG_HOME/my-app/config.toml, or ~/.config/my-app/config.toml
+        // when XDG_CONFIG_HOME is unset, empty, or not an absolute path.
         helper.XDGConfigFile(),
         helper.HomeBoth(),
         helper.WalkCwdToHomeBoth(),
