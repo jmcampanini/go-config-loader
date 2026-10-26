@@ -3,6 +3,6 @@
 - Run tasks with `mise run <task>`; do not call `go`, `golangci-lint`, `govulncheck`, `markdownlint-cli2`, or similar tools directly.
 - Run `mise run check` before declaring work done.
 - `mise run check` is read-only and must leave the tracked tree unchanged.
-- `GOTOOLCHAIN=local` makes Go run the toolchain mise installed, so keep the `go` directive in every `go.mod` equal to the `go` pin.
+- `GOTOOLCHAIN=local` makes Go run the toolchain mise installed. The `go` directive in every `go.mod` is the oldest Go release line the library supports, written as `1.N.0`. Keep it at or below the `go` pin and raise it only when the code needs a newer Go.
 - Bump a tool with `mise upgrade --bump <tool>`, run `mise lock` and `mise run check`, and commit `mise.toml`, `mise.lock`, and `.mise/locks/` together.
 - Prefer targeted `mise run test-pkg ./path` while iterating, then finish with `mise run check`.

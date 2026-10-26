@@ -1,6 +1,6 @@
 module github.com/jmcampanini/go-config-loader/examples/basic
 
-go 1.27.2
+go 1.26.0
 
 require github.com/jmcampanini/go-config-loader v0.0.0
 
