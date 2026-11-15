@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", ":disableDependencyDashboard"],
+  "ignorePaths": [],
+  "enabledManagers": ["mise", "gomod", "github-actions"],
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "labels": ["dependencies"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "addLabels": ["go"],
+      "constraintsFiltering": "strict"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "go minor and patch"
+    },
+    {
+      "description": "The examples require the root module at v0.0.0 and replace it with the local checkout.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/jmcampanini/go-config-loader"],
+      "enabled": false
+    },
+    {
+      "description": "lipgloss v2 is published as charm.land/lipgloss/v2, so a major update of the github.com path cannot resolve.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/charmbracelet/lipgloss"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "addLabels": ["github-actions"],
+      "groupName": "actions"
+    },
+    {
+      "matchManagers": ["mise"],
+      "addLabels": ["mise"]
+    },
+    {
+      "matchManagers": ["mise"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "mise minor and patch"
+    },
+    {
+      "description": "govulncheck versions are looked up with a leading v and the pin in mise.toml has none.",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["go:golang.org/x/vuln/cmd/govulncheck"],
+      "extractVersion": "^v(?<version>.+)$"
+    }
+  ]
+}
