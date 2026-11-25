@@ -63,7 +63,7 @@
       "automerge": true
     },
     {
-      "description": "Action updates below a major only change CI, so a bad one fails the required checks. Majors get their own branch, so everything else is matched and the actions branch never holds a manual update.",
+      "description": "Action updates below a major only change CI, so a bad one fails the required checks. Majors get their own branch, so the actions branch never holds a manual update.",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["!major"],
       "automerge": true
