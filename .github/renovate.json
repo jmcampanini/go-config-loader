@@ -45,8 +45,8 @@
     },
     {
       "matchManagers": ["mise"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "mise minor and patch"
+      "matchUpdateTypes": ["minor"],
+      "groupName": "mise minor"
     },
     {
       "description": "govulncheck versions are looked up with a leading v and the pin in mise.toml has none.",
@@ -55,16 +55,17 @@
       "extractVersion": "^v(?<version>.+)$"
     },
     {
-      "description": "Action updates below a major only change CI, so a bad one fails the required checks.",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-      "automerge": true
-    },
-    {
-      "description": "mise pins the development tools, so their patch updates merge once the required checks pass. The go pin stays manual because the Go toolchain compiles and tests the library.",
+      "description": "mise pins the development tools, so their patch updates get a group of their own that merges once the required checks pass. The go pin is left out because the Go toolchain compiles and tests the library.",
       "matchManagers": ["mise"],
       "matchDepNames": ["!go"],
       "matchUpdateTypes": ["patch"],
+      "groupName": "mise patch",
+      "automerge": true
+    },
+    {
+      "description": "Action updates below a major only change CI, so a bad one fails the required checks. Majors get their own branch, so everything else is matched and the actions branch never holds a manual update.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["!major"],
       "automerge": true
     }
   ]
