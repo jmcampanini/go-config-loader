@@ -6,6 +6,9 @@
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "labels": ["dependencies"],
+  "lockFileMaintenance": {
+    "automerge": true
+  },
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
@@ -50,6 +53,19 @@
       "matchManagers": ["mise"],
       "matchDepNames": ["go:golang.org/x/vuln/cmd/govulncheck"],
       "extractVersion": "^v(?<version>.+)$"
+    },
+    {
+      "description": "Action updates below a major only change CI, so a bad one fails the required checks. They merge once those checks pass.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "automerge": true
+    },
+    {
+      "description": "mise pins the development tools, so their patch updates merge once the required checks pass. The go pin stays manual because the Go toolchain compiles and tests the library.",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["!go"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
     }
   ]
 }
