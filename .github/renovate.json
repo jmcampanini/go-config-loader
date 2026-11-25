@@ -6,6 +6,9 @@
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "labels": ["dependencies"],
+  "lockFileMaintenance": {
+    "automerge": true
+  },
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
@@ -37,19 +40,33 @@
       "groupName": "actions"
     },
     {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["!major"],
+      "automerge": true
+    },
+    {
       "matchManagers": ["mise"],
       "addLabels": ["mise"]
     },
     {
       "matchManagers": ["mise"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "mise minor and patch"
+      "groupName": "mise minor and patch",
+      "automerge": true
     },
     {
       "description": "govulncheck versions are looked up with a leading v and the pin in mise.toml has none.",
       "matchManagers": ["mise"],
       "matchDepNames": ["go:golang.org/x/vuln/cmd/govulncheck"],
       "extractVersion": "^v(?<version>.+)$"
+    },
+    {
+      "description": "A Go minor release is a new language version, so the go pin gets a pull request of its own.",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["go"],
+      "groupName": "go toolchain",
+      "addLabels": ["go"],
+      "automerge": false
     }
   ]
 }
